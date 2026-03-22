@@ -43,6 +43,37 @@ typedef struct vxui_arena
     uint64_t offset;
 } vxui_arena;
 
+typedef struct vxui_ctx vxui_ctx;
+
+typedef void ( *vxui_action_fn )( vxui_ctx* ctx, uint32_t id, void* userdata );
+
+typedef struct vxui_label_cfg
+{
+    uint32_t font_id;
+    float font_size;
+    vxui_color color;
+} vxui_label_cfg;
+
+typedef struct vxui_value_cfg
+{
+    uint32_t font_id;
+    float font_size;
+    vxui_color color;
+    const char* format;
+    float spring_speed;
+} vxui_value_cfg;
+
+typedef struct vxui_action_cfg
+{
+    uint32_t nav_up;
+    uint32_t nav_down;
+    uint32_t nav_left;
+    uint32_t nav_right;
+    bool no_focus_ring;
+    bool disabled;
+    void* userdata;
+} vxui_action_cfg;
+
 typedef enum vxui_cmd_type
 {
     VXUI_CMD_RECT,
@@ -125,6 +156,28 @@ typedef struct vxui_draw_list
     int length;
 } vxui_draw_list;
 
+typedef enum vxui_decl_kind
+{
+    VXUI_DECL_LABEL,
+    VXUI_DECL_VALUE,
+    VXUI_DECL_ACTION,
+} vxui_decl_kind;
+
+typedef struct vxui_decl
+{
+    vxui_decl_kind kind;
+    uint32_t id;
+    uint32_t nav_up;
+    uint32_t nav_down;
+    uint32_t nav_left;
+    uint32_t nav_right;
+    bool focusable;
+    bool disabled;
+    bool no_focus_ring;
+    vxui_action_fn on_confirm;
+    void* userdata;
+} vxui_decl;
+
 typedef struct vxui_ctx
 {
     vxui_config cfg;
@@ -165,6 +218,14 @@ typedef struct vxui_ctx
     int frame_string_count;
     int frame_string_capacity;
 
+    vxui_decl* decls;
+    int decl_count;
+    int decl_capacity;
+
+    uint32_t default_font_id;
+    float default_font_size;
+    vxui_color default_text_color;
+
     /* vxui_anim_state* anim_states; */
     /* int anim_state_count; */
     /* int anim_state_capacity; */
@@ -180,6 +241,9 @@ vxui_draw_list vxui_end( vxui_ctx* ctx );
 void vxui_flush_text( vxui_ctx* ctx );
 void vxui_set_fontcache( vxui_ctx* ctx, ve_fontcache* cache );
 void vxui_set_text_fn( vxui_ctx* ctx, const char* ( *fn )( const char* key, void* userdata ), void* userdata );
+void VXUI_LABEL( vxui_ctx* ctx, const char* l10n_key, vxui_label_cfg cfg );
+void VXUI_VALUE( vxui_ctx* ctx, const char* l10n_key, float value, vxui_value_cfg cfg );
+void VXUI_ACTION( vxui_ctx* ctx, const char* id, const char* l10n_key, vxui_action_fn fn, vxui_action_cfg cfg );
 uint32_t vxui_id( const char* label );
 uint32_t vxui_idi( const char* label, int index );
 
@@ -209,8 +273,15 @@ static Clay_Dimensions vxui__measure_text( Clay_StringSlice text, Clay_TextEleme
 static void vxui__reset_frame_buffers( vxui_ctx* ctx );
 static vxui_cmd* vxui__push_cmd( vxui_ctx* ctx, vxui_cmd_type type );
 static vxui_draw_cmd_text* vxui__push_text( vxui_ctx* ctx );
+static vxui_decl* vxui__push_decl( vxui_ctx* ctx );
 static const char* vxui__push_frame_string( vxui_ctx* ctx, const char* text, size_t length );
 static const char* vxui__copy_slice_text( vxui_ctx* ctx, Clay_StringSlice text );
+static const char* vxui__resolve_text( vxui_ctx* ctx, const char* key );
+static uint32_t vxui__effective_font_id( vxui_ctx* ctx, uint32_t font_id );
+static float vxui__effective_font_size( vxui_ctx* ctx, float font_size );
+static vxui_color vxui__effective_text_color( vxui_ctx* ctx, vxui_color color );
+static void vxui__emit_text( vxui_ctx* ctx, const char* text, uint32_t font_id, float font_size, vxui_color color );
+static void vxui__register_action( vxui_ctx* ctx, uint32_t id, vxui_action_fn fn, vxui_action_cfg cfg );
 static void vxui__translate_clay_commands( vxui_ctx* ctx );
 static vxui_config vxui__sanitize_config( vxui_config cfg );
 
@@ -335,6 +406,7 @@ static void vxui__reset_frame_buffers( vxui_ctx* ctx )
     ctx->clip_active = false;
     ctx->clip_stack_count = 0;
     ctx->frame_string_count = 0;
+    ctx->decl_count = 0;
 }
 
 static vxui_cmd* vxui__push_cmd( vxui_ctx* ctx, vxui_cmd_type type )
@@ -360,6 +432,17 @@ static vxui_draw_cmd_text* vxui__push_text( vxui_ctx* ctx )
     return text;
 }
 
+static vxui_decl* vxui__push_decl( vxui_ctx* ctx )
+{
+    if ( ctx->decl_count >= ctx->decl_capacity ) {
+        return nullptr;
+    }
+
+    vxui_decl* decl = &ctx->decls[ ctx->decl_count++ ];
+    *decl = vxui_decl {};
+    return decl;
+}
+
 static const char* vxui__push_frame_string( vxui_ctx* ctx, const char* text, size_t length )
 {
     if ( !ctx->frame_string_buffer || ctx->frame_string_count + ( int ) length + 1 > ctx->frame_string_capacity ) {
@@ -382,6 +465,67 @@ static const char* vxui__copy_slice_text( vxui_ctx* ctx, Clay_StringSlice text )
         return vxui__push_frame_string( ctx, "", 0 );
     }
     return vxui__push_frame_string( ctx, text.chars, ( size_t ) text.length );
+}
+
+static const char* vxui__resolve_text( vxui_ctx* ctx, const char* key )
+{
+    if ( ctx->text_fn ) {
+        const char* ret = ctx->text_fn( key, ctx->text_fn_userdata );
+        if ( ret ) {
+            return ret;
+        }
+    }
+    return key;
+}
+
+static uint32_t vxui__effective_font_id( vxui_ctx* ctx, uint32_t font_id )
+{
+    return font_id != 0 ? font_id : ctx->default_font_id;
+}
+
+static float vxui__effective_font_size( vxui_ctx* ctx, float font_size )
+{
+    return font_size > 0.0f ? font_size : ctx->default_font_size;
+}
+
+static vxui_color vxui__effective_text_color( vxui_ctx* ctx, vxui_color color )
+{
+    if ( color.r == 0 && color.g == 0 && color.b == 0 && color.a == 0 ) {
+        return ctx->default_text_color;
+    }
+    return color;
+}
+
+static void vxui__emit_text( vxui_ctx* ctx, const char* text, uint32_t font_id, float font_size, vxui_color color )
+{
+    const char* copied = vxui__push_frame_string( ctx, text ? text : "", text ? std::strlen( text ) : 0 );
+    CLAY_TEXT(
+        vxui__clay_string_from_cstr( copied ),
+        CLAY_TEXT_CONFIG( {
+            .textColor = { ( float ) color.r, ( float ) color.g, ( float ) color.b, ( float ) color.a },
+            .fontId = ( uint16_t ) font_id,
+            .fontSize = ( uint16_t ) font_size,
+        } ) );
+}
+
+static void vxui__register_action( vxui_ctx* ctx, uint32_t id, vxui_action_fn fn, vxui_action_cfg cfg )
+{
+    vxui_decl* decl = vxui__push_decl( ctx );
+    if ( !decl ) {
+        return;
+    }
+
+    decl->kind = VXUI_DECL_ACTION;
+    decl->id = id;
+    decl->focusable = !cfg.disabled;
+    decl->disabled = cfg.disabled;
+    decl->no_focus_ring = cfg.no_focus_ring;
+    decl->nav_up = cfg.nav_up;
+    decl->nav_down = cfg.nav_down;
+    decl->nav_left = cfg.nav_left;
+    decl->nav_right = cfg.nav_right;
+    decl->on_confirm = fn;
+    decl->userdata = cfg.userdata;
 }
 
 static void vxui__translate_clay_commands( vxui_ctx* ctx )
@@ -617,6 +761,18 @@ void vxui_init( vxui_ctx* ctx, vxui_arena arena, vxui_config cfg )
         ctx->frame_string_capacity = 0;
     }
 
+    ctx->decls = ( vxui_decl* ) vxui__arena_alloc(
+        &ctx->arena,
+        ( uint64_t ) ctx->cfg.max_elements * ( uint64_t ) sizeof( vxui_decl ),
+        ( uint64_t ) alignof( vxui_decl ) );
+    if ( ctx->decls ) {
+        ctx->decl_capacity = ctx->cfg.max_elements;
+    }
+
+    ctx->default_font_id = 0;
+    ctx->default_font_size = 24.0f;
+    ctx->default_text_color = ( vxui_color ) { 255, 255, 255, 255 };
+
     vxui__reset_frame_buffers( ctx );
 }
 
@@ -662,6 +818,76 @@ void vxui_set_text_fn( vxui_ctx* ctx, const char* ( *fn )( const char* key, void
 {
     ctx->text_fn = fn;
     ctx->text_fn_userdata = userdata;
+}
+
+void VXUI_LABEL( vxui_ctx* ctx, const char* l10n_key, vxui_label_cfg cfg )
+{
+    const char* resolved = vxui__resolve_text( ctx, l10n_key );
+    uint32_t font_id = vxui__effective_font_id( ctx, cfg.font_id );
+    float font_size = vxui__effective_font_size( ctx, cfg.font_size );
+    vxui_color color = vxui__effective_text_color( ctx, cfg.color );
+
+    vxui_decl* decl = vxui__push_decl( ctx );
+    if ( decl ) {
+        decl->kind = VXUI_DECL_LABEL;
+        decl->id = vxui_id( l10n_key );
+    }
+
+    vxui__emit_text( ctx, resolved, font_id, font_size, color );
+}
+
+void VXUI_VALUE( vxui_ctx* ctx, const char* l10n_key, float value, vxui_value_cfg cfg )
+{
+    const char* resolved = vxui__resolve_text( ctx, l10n_key );
+    const char* format = cfg.format ? cfg.format : "%g";
+    uint32_t font_id = vxui__effective_font_id( ctx, cfg.font_id );
+    float font_size = vxui__effective_font_size( ctx, cfg.font_size );
+    vxui_color color = vxui__effective_text_color( ctx, cfg.color );
+
+    int needed = std::snprintf( nullptr, 0, format, value );
+    if ( needed < 0 ) {
+        needed = 0;
+    }
+
+    std::string formatted( ( size_t ) needed, '\0' );
+    if ( needed > 0 ) {
+        std::snprintf( formatted.data(), formatted.size() + 1, format, value );
+    }
+
+    vxui_decl* decl = vxui__push_decl( ctx );
+    if ( decl ) {
+        decl->kind = VXUI_DECL_VALUE;
+        decl->id = vxui_id( l10n_key );
+    }
+
+    CLAY_AUTO_ID( {
+        .layout = {
+            .childGap = 8,
+            .layoutDirection = CLAY_LEFT_TO_RIGHT,
+        },
+    } ) {
+        vxui__emit_text( ctx, resolved, font_id, font_size, color );
+        vxui__emit_text( ctx, formatted.c_str(), font_id, font_size, color );
+    }
+}
+
+void VXUI_ACTION( vxui_ctx* ctx, const char* id, const char* l10n_key, vxui_action_fn fn, vxui_action_cfg cfg )
+{
+    const char* resolved = vxui__resolve_text( ctx, l10n_key );
+    uint32_t action_id = vxui_id( id );
+
+    vxui__register_action( ctx, action_id, fn, cfg );
+
+    CLAY( Clay_GetElementId( vxui__clay_string_from_cstr( id ) ), {
+        .userData = cfg.userdata,
+    } ) {
+        vxui__emit_text(
+            ctx,
+            resolved,
+            ctx->default_font_id,
+            ctx->default_font_size,
+            ctx->default_text_color );
+    }
 }
 
 uint32_t vxui_id( const char* label )

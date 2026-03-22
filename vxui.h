@@ -13,11 +13,20 @@
 typedef struct ve_fontcache ve_fontcache;
 
 #define VXUI( ctx, id_str, ... ) \
-    CLAY( CLAY_ID( id_str ), vxui__rtl_decl( ( ctx ), ( Clay_ElementDeclaration ) __VA_ARGS__ ) )
+    for ( bool _vxui_decl_once = ( ( ctx )->current_decl_id = vxui_id( id_str ), true ); _vxui_decl_once; _vxui_decl_once = false ) \
+        CLAY( CLAY_ID( id_str ), vxui__rtl_decl( ( ctx ), ( Clay_ElementDeclaration ) __VA_ARGS__ ) )
 
 #define VXUI_DEFAULT_STIFFNESS 200.0f
 #define VXUI_DEFAULT_DAMPING 20.0f
 #define VXUI_SETTLE_EPSILON 0.001f
+#define VXUI_TRAIT_PULSE 1u
+#define VXUI_TRAIT_SCANLINE 2u
+#define VXUI_TRAIT_SPIN 3u
+#define VXUI_TRAIT_GLOW 4u
+#define VXUI_TRAIT_SHAKE 5u
+#define VXUI_TRAIT_BLIP 6u
+#define VXUI_MAX_TRAITS_PER_ELEMENT 8
+#define VXUI_MAX_TRAIT_PARAMS 64
 
 typedef struct vxui_vec2
 {
@@ -49,11 +58,14 @@ typedef struct vxui_arena
 } vxui_arena;
 
 typedef struct vxui_ctx vxui_ctx;
+typedef struct vxui_draw_list vxui_draw_list;
+typedef struct vxui_anim_state vxui_anim_state;
 static inline Clay_ElementDeclaration vxui__rtl_decl( vxui_ctx* ctx, Clay_ElementDeclaration decl );
 
 typedef void ( *vxui_action_fn )( vxui_ctx* ctx, uint32_t id, void* userdata );
 typedef void ( *vxui_int_change_fn )( vxui_ctx* ctx, int value, void* userdata );
 typedef void ( *vxui_float_change_fn )( vxui_ctx* ctx, float value, void* userdata );
+typedef void ( *vxui_trait_fn )( vxui_anim_state* element, vxui_draw_list* draw_list, vxui_rect bounds, float t, bool focused, const void* params );
 
 typedef struct vxui_label_cfg
 {
@@ -244,6 +256,14 @@ typedef enum vxui_prop
     VXUI_PROP_SLIDE_Y,
 } vxui_prop;
 
+typedef struct vxui_attached_trait
+{
+    uint32_t id;
+    uint8_t params[ VXUI_MAX_TRAIT_PARAMS ];
+    uint16_t params_size;
+    uint32_t generation;
+} vxui_attached_trait;
+
 typedef struct vxui_anim_state
 {
     uint32_t id;
@@ -281,7 +301,16 @@ typedef struct vxui_anim_state
     float color_a_current;
     float color_a_target;
     float color_a_velocity;
+    vxui_attached_trait traits[ VXUI_MAX_TRAITS_PER_ELEMENT ];
+    int trait_count;
 } vxui_anim_state;
+
+typedef struct vxui_trait_desc
+{
+    uint32_t id;
+    vxui_trait_fn fn;
+    uint16_t params_size;
+} vxui_trait_desc;
 
 typedef struct vxui_anim_slot
 {
@@ -415,6 +444,7 @@ typedef struct vxui_ctx
 
     vxui_cmd* commands;
     uint32_t* command_ids;
+    uint32_t* command_owner_ids;
     uint32_t* command_screen_ids;
     int command_count;
     int command_capacity;
@@ -492,6 +522,10 @@ typedef struct vxui_ctx
     int active_seq_count;
     int active_seq_capacity;
     uint64_t elapsed_ms;
+    vxui_trait_desc* trait_descs;
+    int trait_desc_count;
+    int trait_desc_capacity;
+    uint32_t current_decl_id;
 } vxui_ctx;
 
 static inline Clay_ElementDeclaration vxui__rtl_decl( vxui_ctx* ctx, Clay_ElementDeclaration decl )
@@ -524,6 +558,7 @@ void vxui_register_seq( vxui_ctx* ctx, const char* name, vxui_seq_step* steps, i
 void vxui_fire_seq( vxui_ctx* ctx, const char* name );
 void vxui_stop_seq( vxui_ctx* ctx, const char* name );
 bool vxui_seq_playing( vxui_ctx* ctx, const char* name );
+void vxui_register_trait( vxui_ctx* ctx, uint32_t id, vxui_trait_fn fn, size_t params_size );
 void vxui_list_begin( vxui_ctx* ctx, const char* id, vxui_list_cfg cfg );
 void vxui_list_end( vxui_ctx* ctx );
 void vxui_list_item_begin( vxui_ctx* ctx, int index );
@@ -545,6 +580,12 @@ uint32_t vxui_idi( const char* label, int index );
 
 #define VXUI_LIST_END( ctx ) \
     do { ( void ) ( ctx ); } while ( 0 )
+
+extern thread_local vxui_ctx* vxui__current_ctx;
+void vxui__attach_trait( vxui_ctx* ctx, uint32_t trait_id, const void* params, size_t params_size );
+
+#define VXUI_TRAIT( trait_id, ... ) \
+    do { auto _vxui_trait_params = __VA_ARGS__; vxui__attach_trait( vxui__current_ctx, ( trait_id ), &_vxui_trait_params, sizeof( _vxui_trait_params ) ); } while ( 0 )
 
 #ifdef VXUI_IMPL
 
@@ -577,6 +618,8 @@ static const vxui_input_table vxui__input_keyboard = {
     .left = { 0, '<' },
     .right = { 0, '>' },
 };
+
+thread_local vxui_ctx* vxui__current_ctx = nullptr;
 
 static void* vxui__arena_alloc( vxui_arena* arena, uint64_t size, uint64_t align );
 static uint32_t vxui__hash_bytes( const void* data, size_t size, uint32_t seed );
@@ -639,6 +682,9 @@ static void vxui__emit_snapshot( vxui_ctx* ctx, const vxui_screen* screen );
 static void vxui__compact_dead_screens( vxui_ctx* ctx );
 static void vxui__update_screen_states( vxui_ctx* ctx );
 static void vxui__mirror_rtl_commands( vxui_ctx* ctx );
+static vxui_trait_desc* vxui__find_trait_desc( vxui_ctx* ctx, uint32_t id );
+static void vxui__register_builtin_traits( vxui_ctx* ctx );
+static void vxui__execute_traits( vxui_ctx* ctx );
 static bool vxui__option_step( int* value, int count, int delta, bool wrap );
 static float vxui__clamp01( float t );
 static void vxui__register_decl( vxui_ctx* ctx, vxui_decl_kind kind, uint32_t id, uint32_t nav_up, uint32_t nav_down, uint32_t nav_left, uint32_t nav_right, bool focusable, bool disabled, bool no_focus_ring, vxui_action_fn on_confirm, void* userdata );
@@ -867,6 +913,9 @@ static vxui_cmd* vxui__push_cmd( vxui_ctx* ctx, vxui_cmd_type type )
     cmd->type = type;
     if ( ctx->command_ids ) {
         ctx->command_ids[ index ] = 0;
+    }
+    if ( ctx->command_owner_ids ) {
+        ctx->command_owner_ids[ index ] = 0;
     }
     if ( ctx->command_screen_ids ) {
         vxui_screen* screen = vxui__find_live_screen( ctx );
@@ -1467,6 +1516,246 @@ static void vxui__mirror_rtl_commands( vxui_ctx* ctx )
     }
 }
 
+static vxui_trait_desc* vxui__find_trait_desc( vxui_ctx* ctx, uint32_t id )
+{
+    for ( int i = 0; i < ctx->trait_desc_count; ++i ) {
+        if ( ctx->trait_descs[ i ].id == id ) {
+            return &ctx->trait_descs[ i ];
+        }
+    }
+    return nullptr;
+}
+
+typedef struct vxui__trait_pulse_params
+{
+    float speed;
+    float scale;
+    float alpha;
+} vxui__trait_pulse_params;
+
+typedef struct vxui__trait_glow_params
+{
+    float padding;
+    float alpha;
+} vxui__trait_glow_params;
+
+typedef struct vxui__trait_scanline_params
+{
+    float spacing;
+    float alpha;
+} vxui__trait_scanline_params;
+
+typedef struct vxui__trait_spin_params
+{
+    float speed;
+    float padding;
+} vxui__trait_spin_params;
+
+typedef struct vxui__trait_impulse_params
+{
+    float amount;
+    float alpha;
+} vxui__trait_impulse_params;
+
+static void vxui__trait_pulse( vxui_anim_state* element, vxui_draw_list* draw_list, vxui_rect bounds, float t, bool focused, const void* params )
+{
+    const vxui__trait_pulse_params* p = params ? ( const vxui__trait_pulse_params* ) params : nullptr;
+    float speed = p ? p->speed : 2.0f;
+    float scale = p ? p->scale : 0.08f;
+    float alpha = p ? p->alpha : 0.15f;
+    float wave = 0.5f + 0.5f * std::sinf( t * speed );
+    ( void ) draw_list;
+    ( void ) bounds;
+    ( void ) focused;
+    element->scale_current = element->scale_target = 1.0f + wave * scale;
+    element->opacity_current = element->opacity_target = 1.0f - wave * alpha;
+}
+
+static void vxui__trait_glow( vxui_anim_state* element, vxui_draw_list* draw_list, vxui_rect bounds, float t, bool focused, const void* params )
+{
+    ( void ) element;
+    ( void ) draw_list;
+    ( void ) t;
+    const vxui__trait_glow_params* p = params ? ( const vxui__trait_glow_params* ) params : nullptr;
+    float padding = p ? p->padding : 6.0f;
+    float alpha = p ? p->alpha : ( focused ? 0.35f : 0.18f );
+    vxui_cmd* cmd = vxui__push_cmd( vxui__current_ctx, VXUI_CMD_RECT_ROUNDED );
+    if ( !cmd ) {
+        return;
+    }
+    cmd->rect_rounded.bounds = { bounds.x - padding, bounds.y - padding, bounds.w + padding * 2.0f, bounds.h + padding * 2.0f };
+    cmd->rect_rounded.color = { 80, 200, 255, ( uint8_t ) ( alpha * 255.0f ) };
+    cmd->rect_rounded.radius = 8.0f;
+}
+
+static void vxui__trait_scanline( vxui_anim_state* element, vxui_draw_list* draw_list, vxui_rect bounds, float t, bool focused, const void* params )
+{
+    ( void ) element;
+    ( void ) draw_list;
+    ( void ) focused;
+    const vxui__trait_scanline_params* p = params ? ( const vxui__trait_scanline_params* ) params : nullptr;
+    float spacing = p ? p->spacing : 6.0f;
+    float alpha = p ? p->alpha : 0.12f;
+    float offset = std::fmod( t * 24.0f, spacing );
+    for ( float y = bounds.y + offset; y < bounds.y + bounds.h; y += spacing ) {
+        vxui_cmd* cmd = vxui__push_cmd( vxui__current_ctx, VXUI_CMD_RECT );
+        if ( !cmd ) {
+            break;
+        }
+        cmd->rect.bounds = { bounds.x, y, bounds.w, 1.0f };
+        cmd->rect.color = { 255, 255, 255, ( uint8_t ) ( alpha * 255.0f ) };
+    }
+}
+
+static void vxui__trait_spin( vxui_anim_state* element, vxui_draw_list* draw_list, vxui_rect bounds, float t, bool focused, const void* params )
+{
+    ( void ) element;
+    ( void ) draw_list;
+    ( void ) focused;
+    const vxui__trait_spin_params* p = params ? ( const vxui__trait_spin_params* ) params : nullptr;
+    float padding = p ? p->padding : 4.0f;
+    float phase = std::fmod( t * ( p ? p->speed : 3.0f ), 6.2831853f );
+    vxui_cmd* cmd = vxui__push_cmd( vxui__current_ctx, VXUI_CMD_BORDER );
+    if ( !cmd ) {
+        return;
+    }
+    cmd->border.bounds = { bounds.x - padding + std::sinf( phase ) * 2.0f, bounds.y - padding, bounds.w + padding * 2.0f, bounds.h + padding * 2.0f };
+    cmd->border.color = { 255, 220, 120, 180 };
+    cmd->border.radius = 6.0f;
+    cmd->border.width = 1.0f;
+}
+
+static void vxui__trait_shake( vxui_anim_state* element, vxui_draw_list* draw_list, vxui_rect bounds, float t, bool focused, const void* params )
+{
+    ( void ) draw_list;
+    ( void ) bounds;
+    ( void ) focused;
+    const vxui__trait_impulse_params* p = params ? ( const vxui__trait_impulse_params* ) params : nullptr;
+    float amount = p ? p->amount : 6.0f;
+    element->slide_x_current = element->slide_x_target = std::sinf( t * 40.0f ) * amount;
+}
+
+static void vxui__trait_blip( vxui_anim_state* element, vxui_draw_list* draw_list, vxui_rect bounds, float t, bool focused, const void* params )
+{
+    ( void ) draw_list;
+    ( void ) bounds;
+    ( void ) focused;
+    ( void ) t;
+    const vxui__trait_impulse_params* p = params ? ( const vxui__trait_impulse_params* ) params : nullptr;
+    float amount = p ? p->amount : 0.25f;
+    float alpha = p ? p->alpha : 0.2f;
+    element->scale_current = element->scale_target = 1.0f + amount;
+    element->opacity_current = element->opacity_target = 1.0f - alpha;
+}
+
+void vxui_register_trait( vxui_ctx* ctx, uint32_t id, vxui_trait_fn fn, size_t params_size )
+{
+    vxui_trait_desc* existing = vxui__find_trait_desc( ctx, id );
+    if ( existing ) {
+        existing->fn = fn;
+        existing->params_size = ( uint16_t ) params_size;
+        return;
+    }
+    if ( ctx->trait_desc_count >= ctx->trait_desc_capacity ) {
+        return;
+    }
+    ctx->trait_descs[ ctx->trait_desc_count++ ] = { id, fn, ( uint16_t ) params_size };
+}
+
+void vxui__attach_trait( vxui_ctx* ctx, uint32_t trait_id, const void* params, size_t params_size )
+{
+    if ( !ctx || ctx->current_decl_id == 0 ) {
+        assert( false && "VXUI_TRAIT used without active declaration" );
+        return;
+    }
+    vxui_trait_desc* desc = vxui__find_trait_desc( ctx, trait_id );
+    if ( !desc ) {
+        assert( false && "VXUI_TRAIT missing trait id" );
+        return;
+    }
+
+    vxui_anim_state* st = vxui__get_anim_state( ctx, ctx->current_decl_id, true );
+    if ( !st ) {
+        return;
+    }
+
+    if ( params_size > VXUI_MAX_TRAIT_PARAMS ) {
+        params_size = VXUI_MAX_TRAIT_PARAMS;
+    }
+
+    for ( int i = 0; i < st->trait_count; ++i ) {
+        if ( st->traits[ i ].id == trait_id ) {
+            if ( st->traits[ i ].params_size != params_size || std::memcmp( st->traits[ i ].params, params, params_size ) != 0 ) {
+                std::memcpy( st->traits[ i ].params, params, params_size );
+                st->traits[ i ].params_size = ( uint16_t ) params_size;
+                st->traits[ i ].generation = st->traits[ i ].generation + 1u;
+            }
+            return;
+        }
+    }
+
+    if ( st->trait_count >= VXUI_MAX_TRAITS_PER_ELEMENT ) {
+        return;
+    }
+    vxui_attached_trait* trait = &st->traits[ st->trait_count++ ];
+    *trait = {};
+    trait->id = trait_id;
+    trait->params_size = ( uint16_t ) params_size;
+    if ( params && params_size > 0 ) {
+        std::memcpy( trait->params, params, params_size );
+    }
+    trait->generation = 1;
+}
+
+static void vxui__register_builtin_traits( vxui_ctx* ctx )
+{
+    vxui_register_trait( ctx, VXUI_TRAIT_PULSE, vxui__trait_pulse, sizeof( vxui__trait_pulse_params ) );
+    vxui_register_trait( ctx, VXUI_TRAIT_SCANLINE, vxui__trait_scanline, sizeof( vxui__trait_scanline_params ) );
+    vxui_register_trait( ctx, VXUI_TRAIT_SPIN, vxui__trait_spin, sizeof( vxui__trait_spin_params ) );
+    vxui_register_trait( ctx, VXUI_TRAIT_GLOW, vxui__trait_glow, sizeof( vxui__trait_glow_params ) );
+    vxui_register_trait( ctx, VXUI_TRAIT_SHAKE, vxui__trait_shake, sizeof( vxui__trait_impulse_params ) );
+    vxui_register_trait( ctx, VXUI_TRAIT_BLIP, vxui__trait_blip, sizeof( vxui__trait_impulse_params ) );
+}
+
+static void vxui__execute_traits( vxui_ctx* ctx )
+{
+    vxui_draw_list list = { ctx->commands, ctx->command_count };
+    float t = ( float ) ctx->elapsed_ms / 1000.0f;
+    for ( int i = 0; i < ctx->anim_capacity; ++i ) {
+        if ( !ctx->anim_slots[ i ].occupied ) {
+            continue;
+        }
+
+        vxui_anim_state* st = &ctx->anim_slots[ i ].state;
+        if ( st->trait_count <= 0 || st->last_seen_frame != ctx->frame_index ) {
+            continue;
+        }
+
+        bool focused = st->id == ctx->focused_id;
+        for ( int trait_index = 0; trait_index < st->trait_count; ++trait_index ) {
+            vxui_attached_trait* trait = &st->traits[ trait_index ];
+            vxui_trait_desc* desc = vxui__find_trait_desc( ctx, trait->id );
+            if ( !desc || !desc->fn ) {
+                continue;
+            }
+            if ( ( trait->id == VXUI_TRAIT_SHAKE || trait->id == VXUI_TRAIT_BLIP ) && trait->generation == 0 ) {
+                continue;
+            }
+
+            desc->fn( st, &list, st->bounds, t, focused, trait->params );
+            if ( trait->id == VXUI_TRAIT_SHAKE || trait->id == VXUI_TRAIT_BLIP ) {
+                trait->generation = 0;
+            }
+        }
+
+        for ( int cmd_index = 0; cmd_index < ctx->command_count; ++cmd_index ) {
+            if ( ctx->command_owner_ids && ctx->command_owner_ids[ cmd_index ] == st->id ) {
+                vxui__apply_anim_to_cmd( &ctx->commands[ cmd_index ], st );
+            }
+        }
+    }
+}
+
 static vxui_anim_slot* vxui__get_anim_slot( vxui_ctx* ctx, uint32_t id, bool create )
 {
     if ( !ctx->anim_slots || ctx->anim_capacity <= 0 ) {
@@ -1918,6 +2207,9 @@ static void vxui__emit_focus_ring( vxui_ctx* ctx )
     if ( ctx->command_ids ) {
         ctx->command_ids[ ctx->command_count - 1 ] = 0;
     }
+    if ( ctx->command_owner_ids ) {
+        ctx->command_owner_ids[ ctx->command_count - 1 ] = 0;
+    }
     if ( ctx->command_screen_ids ) {
         ctx->command_screen_ids[ ctx->command_count - 1 ] = 0;
     }
@@ -2151,6 +2443,9 @@ static void vxui__translate_clay_commands( vxui_ctx* ctx )
                 if ( ctx->command_ids ) {
                     ctx->command_ids[ ctx->command_count - 1 ] = src->id;
                 }
+                if ( ctx->command_owner_ids ) {
+                    ctx->command_owner_ids[ ctx->command_count - 1 ] = src->id;
+                }
 
                 cmd->clip_rect = ctx->current_clip_rect;
                 if ( radius > 0.0f ) {
@@ -2175,6 +2470,9 @@ static void vxui__translate_clay_commands( vxui_ctx* ctx )
                 if ( ctx->command_ids ) {
                     ctx->command_ids[ ctx->command_count - 1 ] = src->id;
                 }
+                if ( ctx->command_owner_ids ) {
+                    ctx->command_owner_ids[ ctx->command_count - 1 ] = src->id;
+                }
 
                 cmd->clip_rect = ctx->current_clip_rect;
                 cmd->border.bounds = vxui__rect_from_clay_box( src->boundingBox );
@@ -2196,6 +2494,9 @@ static void vxui__translate_clay_commands( vxui_ctx* ctx )
                 }
                 if ( ctx->command_ids ) {
                     ctx->command_ids[ ctx->command_count - 1 ] = src->id;
+                }
+                if ( ctx->command_owner_ids ) {
+                    ctx->command_owner_ids[ ctx->command_count - 1 ] = src->userData ? ( uint32_t ) ( uintptr_t ) src->userData : src->id;
                 }
 
                 queued->pos = ( vxui_vec2 ) { src->boundingBox.x, src->boundingBox.y };
@@ -2220,6 +2521,9 @@ static void vxui__translate_clay_commands( vxui_ctx* ctx )
                 }
                 if ( ctx->command_ids ) {
                     ctx->command_ids[ ctx->command_count - 1 ] = src->id;
+                }
+                if ( ctx->command_owner_ids ) {
+                    ctx->command_owner_ids[ ctx->command_count - 1 ] = src->id;
                 }
 
                 cmd->clip_rect = ctx->current_clip_rect;
@@ -2248,6 +2552,9 @@ static void vxui__translate_clay_commands( vxui_ctx* ctx )
                 if ( ctx->command_ids ) {
                     ctx->command_ids[ ctx->command_count - 1 ] = src->id;
                 }
+                if ( ctx->command_owner_ids ) {
+                    ctx->command_owner_ids[ ctx->command_count - 1 ] = src->id;
+                }
 
                 cmd->clip_rect = ctx->current_clip_rect;
                 cmd->clip.rect = ctx->current_clip_rect;
@@ -2260,6 +2567,9 @@ static void vxui__translate_clay_commands( vxui_ctx* ctx )
                 if ( cmd ) {
                     if ( ctx->command_ids ) {
                         ctx->command_ids[ ctx->command_count - 1 ] = src->id;
+                    }
+                    if ( ctx->command_owner_ids ) {
+                        ctx->command_owner_ids[ ctx->command_count - 1 ] = src->id;
                     }
                     cmd->clip_rect = ctx->current_clip_rect;
                     cmd->clip.rect = ctx->current_clip_rect;
@@ -2337,7 +2647,7 @@ uint64_t vxui_min_memory_size( void )
     uint64_t clay_bytes = ( uint64_t ) Clay_MinMemorySize();
     uint64_t command_capacity = ( uint64_t ) VXUI__DEFAULT_MAX_ELEMENTS + ( uint64_t ) VXUI__DEFAULT_MAX_ANIM_STATES;
     uint64_t command_bytes = command_capacity * ( uint64_t ) sizeof( vxui_cmd );
-    uint64_t command_id_bytes = command_capacity * ( uint64_t ) sizeof( uint32_t ) * 2u;
+    uint64_t command_id_bytes = command_capacity * ( uint64_t ) sizeof( uint32_t ) * 3u;
     uint64_t text_bytes = command_capacity * ( uint64_t ) sizeof( vxui_draw_cmd_text );
     uint64_t clip_bytes = ( uint64_t ) VXUI__DEFAULT_MAX_ELEMENTS * ( uint64_t ) sizeof( vxui_rect );
     uint64_t decl_bytes = ( uint64_t ) VXUI__DEFAULT_MAX_ELEMENTS * ( uint64_t ) sizeof( vxui_decl );
@@ -2355,9 +2665,10 @@ uint64_t vxui_min_memory_size( void )
     uint64_t registered_seq_bytes = ( uint64_t ) VXUI__DEFAULT_MAX_SEQUENCES * ( uint64_t ) sizeof( vxui_registered_seq );
     uint64_t active_seq_bytes = ( uint64_t ) VXUI__DEFAULT_MAX_ACTIVE_SEQS * ( uint64_t ) sizeof( vxui_active_seq );
     uint64_t locale_font_bytes = 32u * ( uint64_t ) sizeof( vxui_locale_font );
+    uint64_t trait_desc_bytes = 32u * ( uint64_t ) sizeof( vxui_trait_desc );
     uint64_t frame_bytes = ( uint64_t ) VXUI__DEFAULT_FRAME_STRING_BYTES;
     uint64_t slack_bytes = 64u * 1024u;
-    return clay_bytes + command_bytes + command_id_bytes + text_bytes + clip_bytes + decl_bytes + owner_bytes + list_scope_bytes + list_state_bytes + anim_bytes + retained_cmd_bytes + retained_valid_bytes + retained_text_bytes + screen_bytes + snapshot_cmd_bytes + snapshot_id_bytes + snapshot_text_bytes + registered_seq_bytes + active_seq_bytes + locale_font_bytes + frame_bytes + slack_bytes;
+    return clay_bytes + command_bytes + command_id_bytes + text_bytes + clip_bytes + decl_bytes + owner_bytes + list_scope_bytes + list_state_bytes + anim_bytes + retained_cmd_bytes + retained_valid_bytes + retained_text_bytes + screen_bytes + snapshot_cmd_bytes + snapshot_id_bytes + snapshot_text_bytes + registered_seq_bytes + active_seq_bytes + locale_font_bytes + trait_desc_bytes + frame_bytes + slack_bytes;
 }
 
 vxui_arena vxui_create_arena( uint64_t size, void* memory )
@@ -2399,6 +2710,10 @@ void vxui_init( vxui_ctx* ctx, vxui_arena arena, vxui_config cfg )
         ctx->command_capacity = ctx->cfg.max_elements + ctx->cfg.max_anim_states;
     }
     ctx->command_ids = ( uint32_t* ) vxui__arena_alloc(
+        &ctx->arena,
+        ( uint64_t ) ctx->command_capacity * ( uint64_t ) sizeof( uint32_t ),
+        ( uint64_t ) alignof( uint32_t ) );
+    ctx->command_owner_ids = ( uint32_t* ) vxui__arena_alloc(
         &ctx->arena,
         ( uint64_t ) ctx->command_capacity * ( uint64_t ) sizeof( uint32_t ),
         ( uint64_t ) alignof( uint32_t ) );
@@ -2582,8 +2897,19 @@ void vxui_init( vxui_ctx* ctx, vxui_arena arena, vxui_config cfg )
     } else {
         ctx->locale_font_capacity = 0;
     }
+    ctx->trait_desc_capacity = 32;
+    ctx->trait_descs = ( vxui_trait_desc* ) vxui__arena_alloc(
+        &ctx->arena,
+        ( uint64_t ) ctx->trait_desc_capacity * ( uint64_t ) sizeof( vxui_trait_desc ),
+        ( uint64_t ) alignof( vxui_trait_desc ) );
+    if ( ctx->trait_descs ) {
+        std::memset( ctx->trait_descs, 0, ( size_t ) ctx->trait_desc_capacity * sizeof( vxui_trait_desc ) );
+    } else {
+        ctx->trait_desc_capacity = 0;
+    }
     std::snprintf( ctx->locale, sizeof( ctx->locale ), "%s", "en" );
     ctx->rtl = false;
+    vxui__register_builtin_traits( ctx );
 
     vxui__reset_frame_buffers( ctx );
 }
@@ -2593,6 +2919,7 @@ void vxui_begin( vxui_ctx* ctx, float delta_time )
     ctx->frame_index += 1;
     ctx->delta_time = delta_time;
     vxui__reset_frame_buffers( ctx );
+    vxui__current_ctx = ctx;
 
     if ( ctx->clay_ctx ) {
         Clay_SetCurrentContext( ctx->clay_ctx );
@@ -2615,6 +2942,7 @@ vxui_draw_list vxui_end( vxui_ctx* ctx )
         ctx->clay_render_commands = Clay_EndLayout();
         vxui__translate_clay_commands( ctx );
     }
+    vxui__execute_traits( ctx );
 
     vxui__resolve_focus( ctx );
     vxui__update_focus_ring( ctx );
@@ -2640,6 +2968,7 @@ vxui_draw_list vxui_end( vxui_ctx* ctx )
 
     list.commands = ctx->commands;
     list.length = ctx->command_count;
+    vxui__current_ctx = nullptr;
     return list;
 }
 
@@ -2840,6 +3169,7 @@ void vxui_list_begin( vxui_ctx* ctx, const char* id, vxui_list_cfg cfg )
     vxui__register_decl( ctx, VXUI_DECL_LIST, list_id, 0, 0, 0, 0, true, false, false, nullptr, nullptr );
     vxui__get_anim_state( ctx, list_id, true );
     vxui__push_input_owner( ctx, list_id, true, true, false, false );
+    ctx->current_decl_id = list_id;
 
     vxui_list_cfg effective = cfg;
     if ( effective.max_visible <= 0 ) {
@@ -2984,6 +3314,7 @@ void VXUI_LABEL( vxui_ctx* ctx, const char* l10n_key, vxui_label_cfg cfg )
         decl->id = decl_id;
     }
     vxui__get_anim_state( ctx, decl_id, true );
+    ctx->current_decl_id = decl_id;
 
     CLAY( vxui__clay_id_from_hash( decl_id ), {} ) {
         vxui__emit_text( ctx, resolved, font_id, font_size, color, decl_id );
@@ -3015,6 +3346,7 @@ void VXUI_VALUE( vxui_ctx* ctx, const char* l10n_key, float value, vxui_value_cf
         decl->id = decl_id;
     }
     vxui__get_anim_state( ctx, decl_id, true );
+    ctx->current_decl_id = decl_id;
 
     CLAY( vxui__clay_id_from_hash( decl_id ), {
         .layout = {
@@ -3034,6 +3366,7 @@ void VXUI_ACTION( vxui_ctx* ctx, const char* id, const char* l10n_key, vxui_acti
 
     vxui__register_action( ctx, action_id, fn, cfg );
     vxui__get_anim_state( ctx, action_id, true );
+    ctx->current_decl_id = action_id;
 
     CLAY( vxui__clay_id_from_hash( action_id ), {
         .userData = cfg.userdata,
@@ -3070,6 +3403,7 @@ void VXUI_OPTION( vxui_ctx* ctx, const char* id, int* index, const char** string
         cfg.userdata );
     vxui__get_anim_state( ctx, option_id, true );
     vxui__push_input_owner( ctx, option_id, false, false, true, true );
+    ctx->current_decl_id = option_id;
 
     if ( index && count > 0 ) {
         if ( *index < 0 ) {
@@ -3119,6 +3453,7 @@ void VXUI_SLIDER( vxui_ctx* ctx, const char* id, float* value, float min_value, 
     vxui__register_decl( ctx, VXUI_DECL_SLIDER, slider_id, 0, 0, 0, 0, true, false, false, nullptr, cfg.userdata );
     vxui__get_anim_state( ctx, slider_id, true );
     vxui__push_input_owner( ctx, slider_id, false, false, true, true );
+    ctx->current_decl_id = slider_id;
 
     if ( value ) {
         if ( *value < min_value ) {
@@ -3222,6 +3557,7 @@ void VXUI_PROMPT( vxui_ctx* ctx, const char* action_name )
     uint32_t prompt_id = vxui_id( action_name );
     vxui__register_decl( ctx, VXUI_DECL_PROMPT, prompt_id, 0, 0, 0, 0, false, false, true, nullptr, nullptr );
     vxui__get_anim_state( ctx, prompt_id, true );
+    ctx->current_decl_id = prompt_id;
 
     CLAY( vxui__clay_id_from_hash( prompt_id ), {} ) {
         vxui__emit_text( ctx, glyph, binding.font_id != 0 ? binding.font_id : ctx->default_font_id, ctx->default_font_size, ctx->default_text_color, prompt_id );

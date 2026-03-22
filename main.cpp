@@ -20,6 +20,31 @@ typedef struct vxui_demo_app
     int locale_index;
 } vxui_demo_app;
 
+typedef struct vxui_demo_pulse
+{
+    float speed;
+    float scale;
+    float alpha;
+} vxui_demo_pulse;
+
+typedef struct vxui_demo_glow
+{
+    float padding;
+    float alpha;
+} vxui_demo_glow;
+
+typedef struct vxui_demo_scanline
+{
+    float spacing;
+    float alpha;
+} vxui_demo_scanline;
+
+typedef struct vxui_demo_spin
+{
+    float speed;
+    float padding;
+} vxui_demo_spin;
+
 static const char* vxui_demo_text( const char* key, void* userdata )
 {
     vxui_demo_app* app = ( vxui_demo_app* ) userdata;
@@ -301,6 +326,7 @@ int main( void )
                     .font_size = 42.0f,
                     .color = { 255, 255, 255, 255 },
                 } );
+                VXUI_TRAIT( VXUI_TRAIT_SPIN, ( vxui_demo_spin ) { .speed = 2.0f, .padding = 4.0f } );
 
                 VXUI( &ctx, "settings.row.difficulty", {
                     .layout = {
@@ -354,6 +380,7 @@ int main( void )
                 VXUI_ACTION( &ctx, "settings.back", "menu.back", vxui_demo_close_settings, ( vxui_action_cfg ) {
                     .userdata = &app,
                 } );
+                VXUI_TRAIT( VXUI_TRAIT_GLOW, ( vxui_demo_glow ) { .padding = 4.0f, .alpha = 0.25f } );
             }
         } else {
             VXUI( &ctx, "main_menu", {
@@ -369,9 +396,12 @@ int main( void )
                     .font_size = 44.0f,
                     .color = { 255, 255, 255, 255 },
                 } );
+                VXUI_TRAIT( VXUI_TRAIT_PULSE, ( vxui_demo_pulse ) { .speed = 2.0f, .scale = 0.06f, .alpha = 0.15f } );
                 VXUI_ACTION( &ctx, "main.settings", "menu.open_settings", vxui_demo_open_settings, ( vxui_action_cfg ) {
                     .userdata = &app,
                 } );
+                VXUI_TRAIT( VXUI_TRAIT_GLOW, ( vxui_demo_glow ) { .padding = 4.0f, .alpha = 0.2f } );
+                VXUI_TRAIT( VXUI_TRAIT_SCANLINE, ( vxui_demo_scanline ) { .spacing = 6.0f, .alpha = 0.1f } );
             }
         }
 

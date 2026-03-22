@@ -3,11 +3,16 @@
 #include <stdint.h>
 #include <stddef.h>
 #include <stdbool.h>
+#include <cassert>
+#include <cstdio>
 #include <cstring>
 #include <string>
 
 #include "clay/clay.h"
 typedef struct ve_fontcache ve_fontcache;
+
+#define VXUI( ctx, id_str, ... ) \
+    CLAY( CLAY_ID( id_str ), __VA_ARGS__ )
 
 typedef struct vxui_vec2
 {
@@ -143,6 +148,23 @@ typedef struct vxui_ctx
     bool pending_cancel;
     int pending_tab;
 
+    Clay_Context* clay_ctx;
+    Clay_Arena clay_arena;
+    Clay_ErrorHandler clay_error_handler;
+    const char* ( *text_fn )( const char* key, void* userdata );
+    void* text_fn_userdata;
+    Clay_RenderCommandArray clay_render_commands;
+    vxui_rect current_clip_rect;
+    bool clip_active;
+
+    vxui_rect* clip_stack;
+    int clip_stack_count;
+    int clip_stack_capacity;
+
+    char* frame_string_buffer;
+    int frame_string_count;
+    int frame_string_capacity;
+
     /* vxui_anim_state* anim_states; */
     /* int anim_state_count; */
     /* int anim_state_capacity; */
@@ -156,6 +178,8 @@ void vxui_init( vxui_ctx* ctx, vxui_arena arena, vxui_config cfg );
 void vxui_begin( vxui_ctx* ctx, float delta_time );
 vxui_draw_list vxui_end( vxui_ctx* ctx );
 void vxui_flush_text( vxui_ctx* ctx );
+void vxui_set_fontcache( vxui_ctx* ctx, ve_fontcache* cache );
+void vxui_set_text_fn( vxui_ctx* ctx, const char* ( *fn )( const char* key, void* userdata ), void* userdata );
 uint32_t vxui_id( const char* label );
 uint32_t vxui_idi( const char* label, int index );
 
@@ -172,14 +196,22 @@ enum
     VXUI__DEFAULT_MAX_ANIM_STATES = 1024,
     VXUI__DEFAULT_MAX_SEQUENCES = 64,
     VXUI__DEFAULT_MAX_SEQ_STEPS = 1024,
+    VXUI__DEFAULT_FRAME_STRING_BYTES = VXUI__DEFAULT_MAX_ELEMENTS * 128,
 };
 
 static void* vxui__arena_alloc( vxui_arena* arena, uint64_t size, uint64_t align );
 static uint32_t vxui__hash_bytes( const void* data, size_t size, uint32_t seed );
 static Clay_String vxui__clay_string_from_cstr( const char* text );
+static vxui_rect vxui__rect_from_clay_box( Clay_BoundingBox box );
+static vxui_color vxui__color_from_clay( Clay_Color color );
+static void vxui__handle_clay_error( Clay_ErrorData errorData );
+static Clay_Dimensions vxui__measure_text( Clay_StringSlice text, Clay_TextElementConfig* cfg, void* userdata );
 static void vxui__reset_frame_buffers( vxui_ctx* ctx );
 static vxui_cmd* vxui__push_cmd( vxui_ctx* ctx, vxui_cmd_type type );
 static vxui_draw_cmd_text* vxui__push_text( vxui_ctx* ctx );
+static const char* vxui__push_frame_string( vxui_ctx* ctx, const char* text, size_t length );
+static const char* vxui__copy_slice_text( vxui_ctx* ctx, Clay_StringSlice text );
+static void vxui__translate_clay_commands( vxui_ctx* ctx );
 static vxui_config vxui__sanitize_config( vxui_config cfg );
 
 static void* vxui__arena_alloc( vxui_arena* arena, uint64_t size, uint64_t align )
@@ -222,6 +254,74 @@ static Clay_String vxui__clay_string_from_cstr( const char* text )
     return ret;
 }
 
+static vxui_rect vxui__rect_from_clay_box( Clay_BoundingBox box )
+{
+    vxui_rect rect = {};
+    rect.x = box.x;
+    rect.y = box.y;
+    rect.w = box.width;
+    rect.h = box.height;
+    return rect;
+}
+
+static vxui_color vxui__color_from_clay( Clay_Color color )
+{
+    vxui_color ret = {};
+
+    float r = color.r < 0.0f ? 0.0f : ( color.r > 255.0f ? 255.0f : color.r );
+    float g = color.g < 0.0f ? 0.0f : ( color.g > 255.0f ? 255.0f : color.g );
+    float b = color.b < 0.0f ? 0.0f : ( color.b > 255.0f ? 255.0f : color.b );
+    float a = color.a < 0.0f ? 0.0f : ( color.a > 255.0f ? 255.0f : color.a );
+
+    ret.r = ( uint8_t ) r;
+    ret.g = ( uint8_t ) g;
+    ret.b = ( uint8_t ) b;
+    ret.a = ( uint8_t ) a;
+    return ret;
+}
+
+static void vxui__handle_clay_error( Clay_ErrorData errorData )
+{
+    std::fprintf(
+        stderr,
+        "vxui clay error: %.*s\n",
+        errorData.errorText.length,
+        errorData.errorText.chars ? errorData.errorText.chars : "" );
+}
+
+static Clay_Dimensions vxui__measure_text( Clay_StringSlice text, Clay_TextElementConfig* cfg, void* userdata )
+{
+    vxui_ctx* ctx = ( vxui_ctx* ) userdata;
+    Clay_Dimensions dims = {};
+    dims.height = cfg ? ( float ) cfg->fontSize : 0.0f;
+
+    if ( !ctx || !ctx->fontcache || !cfg ) {
+        return dims;
+    }
+
+    ve_fontcache* cache = ctx->fontcache;
+    if ( cfg->fontId >= cache->entry.size() ) {
+        return dims;
+    }
+
+    size_t verts = cache->drawlist.vertices.size();
+    size_t indices = cache->drawlist.indices.size();
+    size_t dcalls = cache->drawlist.dcalls.size();
+    ve_fontcache_vec2 cursor = cache->cursor_pos;
+
+    std::u8string temp( ( const char8_t* ) text.chars, ( size_t ) text.length );
+    ve_fontcache_draw_text( cache, ( ve_font_id ) cfg->fontId, temp, 0.0f, 0.0f, 1.0f, 1.0f, true );
+    ve_fontcache_vec2 end = ve_fontcache_get_cursor_pos( cache );
+
+    cache->drawlist.vertices.resize( verts );
+    cache->drawlist.indices.resize( indices );
+    cache->drawlist.dcalls.resize( dcalls );
+    cache->cursor_pos = cursor;
+
+    dims.width = end.x;
+    return dims;
+}
+
 static void vxui__reset_frame_buffers( vxui_ctx* ctx )
 {
     ctx->command_count = 0;
@@ -230,6 +330,11 @@ static void vxui__reset_frame_buffers( vxui_ctx* ctx )
     ctx->pending_confirm = false;
     ctx->pending_cancel = false;
     ctx->pending_tab = 0;
+    ctx->clay_render_commands = Clay_RenderCommandArray {};
+    ctx->current_clip_rect = vxui_rect {};
+    ctx->clip_active = false;
+    ctx->clip_stack_count = 0;
+    ctx->frame_string_count = 0;
 }
 
 static vxui_cmd* vxui__push_cmd( vxui_ctx* ctx, vxui_cmd_type type )
@@ -253,6 +358,144 @@ static vxui_draw_cmd_text* vxui__push_text( vxui_ctx* ctx )
     vxui_draw_cmd_text* text = &ctx->text_queue[ ctx->text_queue_count++ ];
     *text = vxui_draw_cmd_text {};
     return text;
+}
+
+static const char* vxui__push_frame_string( vxui_ctx* ctx, const char* text, size_t length )
+{
+    if ( !ctx->frame_string_buffer || ctx->frame_string_count + ( int ) length + 1 > ctx->frame_string_capacity ) {
+        assert( false && "vxui frame string buffer exhausted" );
+        return "";
+    }
+
+    char* dest = ctx->frame_string_buffer + ctx->frame_string_count;
+    if ( length > 0 ) {
+        std::memcpy( dest, text, length );
+    }
+    dest[ length ] = '\0';
+    ctx->frame_string_count += ( int ) length + 1;
+    return dest;
+}
+
+static const char* vxui__copy_slice_text( vxui_ctx* ctx, Clay_StringSlice text )
+{
+    if ( !text.chars || text.length <= 0 ) {
+        return vxui__push_frame_string( ctx, "", 0 );
+    }
+    return vxui__push_frame_string( ctx, text.chars, ( size_t ) text.length );
+}
+
+static void vxui__translate_clay_commands( vxui_ctx* ctx )
+{
+    ctx->current_clip_rect = vxui_rect {};
+    ctx->clip_active = false;
+    ctx->clip_stack_count = 0;
+
+    for ( int32_t i = 0; i < ctx->clay_render_commands.length; ++i ) {
+        Clay_RenderCommand* src = Clay_RenderCommandArray_Get( &ctx->clay_render_commands, i );
+        if ( !src ) {
+            continue;
+        }
+
+        switch ( src->commandType ) {
+            case CLAY_RENDER_COMMAND_TYPE_RECTANGLE: {
+                const Clay_RectangleRenderData* rect = &src->renderData.rectangle;
+                float radius = rect->cornerRadius.topLeft;
+                vxui_cmd* cmd = vxui__push_cmd( ctx, radius > 0.0f ? VXUI_CMD_RECT_ROUNDED : VXUI_CMD_RECT );
+                if ( !cmd ) {
+                    break;
+                }
+
+                cmd->clip_rect = ctx->current_clip_rect;
+                if ( radius > 0.0f ) {
+                    cmd->rect_rounded.bounds = vxui__rect_from_clay_box( src->boundingBox );
+                    cmd->rect_rounded.color = vxui__color_from_clay( rect->backgroundColor );
+                    cmd->rect_rounded.radius = radius;
+                } else {
+                    cmd->rect.bounds = vxui__rect_from_clay_box( src->boundingBox );
+                    cmd->rect.color = vxui__color_from_clay( rect->backgroundColor );
+                }
+                break;
+            }
+
+            case CLAY_RENDER_COMMAND_TYPE_TEXT: {
+                const Clay_TextRenderData* text = &src->renderData.text;
+                const char* copied = vxui__copy_slice_text( ctx, text->stringContents );
+                vxui_draw_cmd_text* queued = vxui__push_text( ctx );
+                vxui_cmd* cmd = vxui__push_cmd( ctx, VXUI_CMD_TEXT );
+                if ( !queued || !cmd ) {
+                    break;
+                }
+
+                queued->pos = ( vxui_vec2 ) { src->boundingBox.x, src->boundingBox.y };
+                queued->font_id = text->fontId;
+                queued->size = ( float ) text->fontSize;
+                queued->color = vxui__color_from_clay( text->textColor );
+                queued->text = copied;
+
+                cmd->clip_rect = ctx->current_clip_rect;
+                cmd->text = *queued;
+                break;
+            }
+
+            case CLAY_RENDER_COMMAND_TYPE_IMAGE: {
+                const Clay_ImageRenderData* image = &src->renderData.image;
+                vxui_cmd* cmd = vxui__push_cmd( ctx, VXUI_CMD_IMAGE );
+                if ( !cmd ) {
+                    break;
+                }
+
+                cmd->clip_rect = ctx->current_clip_rect;
+                cmd->image.bounds = vxui__rect_from_clay_box( src->boundingBox );
+                cmd->image.image_data = image->imageData;
+                break;
+            }
+
+            case CLAY_RENDER_COMMAND_TYPE_SCISSOR_START: {
+                if ( ctx->clip_active ) {
+                    assert( ctx->clip_stack_count < ctx->clip_stack_capacity );
+                    if ( ctx->clip_stack_count < ctx->clip_stack_capacity ) {
+                        ctx->clip_stack[ ctx->clip_stack_count++ ] = ctx->current_clip_rect;
+                    }
+                }
+
+                ctx->current_clip_rect = vxui__rect_from_clay_box( src->boundingBox );
+                ctx->clip_active = true;
+
+                vxui_cmd* cmd = vxui__push_cmd( ctx, VXUI_CMD_CLIP_PUSH );
+                if ( !cmd ) {
+                    break;
+                }
+
+                cmd->clip_rect = ctx->current_clip_rect;
+                cmd->clip.rect = ctx->current_clip_rect;
+                break;
+            }
+
+            case CLAY_RENDER_COMMAND_TYPE_SCISSOR_END: {
+                vxui_cmd* cmd = vxui__push_cmd( ctx, VXUI_CMD_CLIP_POP );
+                if ( cmd ) {
+                    cmd->clip_rect = ctx->current_clip_rect;
+                    cmd->clip.rect = ctx->current_clip_rect;
+                }
+
+                if ( ctx->clip_stack_count > 0 ) {
+                    ctx->current_clip_rect = ctx->clip_stack[ --ctx->clip_stack_count ];
+                    ctx->clip_active = true;
+                } else {
+                    ctx->current_clip_rect = vxui_rect {};
+                    ctx->clip_active = false;
+                }
+                break;
+            }
+
+            case CLAY_RENDER_COMMAND_TYPE_NONE:
+            case CLAY_RENDER_COMMAND_TYPE_BORDER:
+            case CLAY_RENDER_COMMAND_TYPE_CUSTOM:
+            default:
+                assert( false && "unsupported clay render command" );
+                break;
+        }
+    }
 }
 
 static vxui_config vxui__sanitize_config( vxui_config cfg )
@@ -304,8 +547,10 @@ uint64_t vxui_min_memory_size( void )
     uint64_t clay_bytes = ( uint64_t ) Clay_MinMemorySize();
     uint64_t command_bytes = ( uint64_t ) VXUI__DEFAULT_MAX_ELEMENTS * ( uint64_t ) sizeof( vxui_cmd );
     uint64_t text_bytes = ( uint64_t ) VXUI__DEFAULT_MAX_ELEMENTS * ( uint64_t ) sizeof( vxui_draw_cmd_text );
+    uint64_t clip_bytes = ( uint64_t ) VXUI__DEFAULT_MAX_ELEMENTS * ( uint64_t ) sizeof( vxui_rect );
+    uint64_t frame_bytes = ( uint64_t ) VXUI__DEFAULT_FRAME_STRING_BYTES;
     uint64_t slack_bytes = 64u * 1024u;
-    return clay_bytes + command_bytes + text_bytes + slack_bytes;
+    return clay_bytes + command_bytes + text_bytes + clip_bytes + frame_bytes + slack_bytes;
 }
 
 vxui_arena vxui_create_arena( uint64_t size, void* memory )
@@ -323,6 +568,22 @@ void vxui_init( vxui_ctx* ctx, vxui_arena arena, vxui_config cfg )
     ctx->cfg = vxui__sanitize_config( cfg );
     ctx->arena = arena;
 
+    void* clay_memory = vxui__arena_alloc(
+        &ctx->arena,
+        ( uint64_t ) Clay_MinMemorySize(),
+        64 );
+    if ( clay_memory ) {
+        Clay_SetCurrentContext( nullptr );
+        ctx->clay_error_handler.errorHandlerFunction = vxui__handle_clay_error;
+        ctx->clay_error_handler.userData = ctx;
+        ctx->clay_arena = Clay_CreateArenaWithCapacityAndMemory( Clay_MinMemorySize(), clay_memory );
+        ctx->clay_ctx = Clay_Initialize(
+            ctx->clay_arena,
+            Clay_Dimensions { ( float ) ctx->cfg.screen_width, ( float ) ctx->cfg.screen_height },
+            ctx->clay_error_handler );
+        Clay_SetMeasureTextFunction( vxui__measure_text, ctx );
+    }
+
     ctx->commands = ( vxui_cmd* ) vxui__arena_alloc(
         &ctx->arena,
         ( uint64_t ) ctx->cfg.max_elements * ( uint64_t ) sizeof( vxui_cmd ),
@@ -339,6 +600,23 @@ void vxui_init( vxui_ctx* ctx, vxui_arena arena, vxui_config cfg )
         ctx->text_queue_capacity = ctx->cfg.max_elements;
     }
 
+    ctx->clip_stack = ( vxui_rect* ) vxui__arena_alloc(
+        &ctx->arena,
+        ( uint64_t ) ctx->cfg.max_elements * ( uint64_t ) sizeof( vxui_rect ),
+        ( uint64_t ) alignof( vxui_rect ) );
+    if ( ctx->clip_stack ) {
+        ctx->clip_stack_capacity = ctx->cfg.max_elements;
+    }
+
+    ctx->frame_string_capacity = ctx->cfg.max_elements * 128;
+    ctx->frame_string_buffer = ( char* ) vxui__arena_alloc(
+        &ctx->arena,
+        ( uint64_t ) ctx->frame_string_capacity,
+        1 );
+    if ( !ctx->frame_string_buffer ) {
+        ctx->frame_string_capacity = 0;
+    }
+
     vxui__reset_frame_buffers( ctx );
 }
 
@@ -347,11 +625,24 @@ void vxui_begin( vxui_ctx* ctx, float delta_time )
     ctx->frame_index += 1;
     ctx->delta_time = delta_time;
     vxui__reset_frame_buffers( ctx );
+
+    if ( ctx->clay_ctx ) {
+        Clay_SetCurrentContext( ctx->clay_ctx );
+        Clay_SetLayoutDimensions( Clay_Dimensions { ( float ) ctx->cfg.screen_width, ( float ) ctx->cfg.screen_height } );
+        Clay_BeginLayout();
+    }
 }
 
 vxui_draw_list vxui_end( vxui_ctx* ctx )
 {
     vxui_draw_list list = {};
+
+    if ( ctx->clay_ctx ) {
+        Clay_SetCurrentContext( ctx->clay_ctx );
+        ctx->clay_render_commands = Clay_EndLayout();
+        vxui__translate_clay_commands( ctx );
+    }
+
     list.commands = ctx->commands;
     list.length = ctx->command_count;
     return list;
@@ -360,6 +651,17 @@ vxui_draw_list vxui_end( vxui_ctx* ctx )
 void vxui_flush_text( vxui_ctx* ctx )
 {
     ( void ) ctx;
+}
+
+void vxui_set_fontcache( vxui_ctx* ctx, ve_fontcache* cache )
+{
+    ctx->fontcache = cache;
+}
+
+void vxui_set_text_fn( vxui_ctx* ctx, const char* ( *fn )( const char* key, void* userdata ), void* userdata )
+{
+    ctx->text_fn = fn;
+    ctx->text_fn_userdata = userdata;
 }
 
 uint32_t vxui_id( const char* label )

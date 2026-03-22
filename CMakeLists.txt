@@ -27,6 +27,7 @@ if(VXUI_BUILD_TESTS)
     add_executable(vxui_tests
         tests/test_main.cpp
         tests/test_core.cpp
+        tests/test_clay_bridge.cpp
     )
     target_link_libraries(vxui_tests PRIVATE vxui)
     add_test(NAME vxui_tests COMMAND vxui_tests)

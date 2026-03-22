@@ -79,10 +79,19 @@ typedef struct vxui_action_cfg
     void* userdata;
 } vxui_action_cfg;
 
+typedef enum vxui_dir
+{
+    VXUI_DIR_UP,
+    VXUI_DIR_DOWN,
+    VXUI_DIR_LEFT,
+    VXUI_DIR_RIGHT,
+} vxui_dir;
+
 typedef enum vxui_cmd_type
 {
     VXUI_CMD_RECT,
     VXUI_CMD_RECT_ROUNDED,
+    VXUI_CMD_BORDER,
     VXUI_CMD_IMAGE,
     VXUI_CMD_TEXT,
     VXUI_CMD_CLIP_PUSH,
@@ -101,6 +110,14 @@ typedef struct vxui_draw_cmd_rect_rounded
     vxui_color color;
     float radius;
 } vxui_draw_cmd_rect_rounded;
+
+typedef struct vxui_draw_cmd_border
+{
+    vxui_rect bounds;
+    vxui_color color;
+    float radius;
+    float width;
+} vxui_draw_cmd_border;
 
 typedef struct vxui_draw_cmd_image
 {
@@ -125,6 +142,7 @@ typedef struct vxui_cmd
     {
         vxui_draw_cmd_rect rect;
         vxui_draw_cmd_rect_rounded rect_rounded;
+        vxui_draw_cmd_border border;
         vxui_draw_cmd_image image;
         vxui_draw_cmd_text text;
         struct
@@ -214,6 +232,20 @@ typedef struct vxui_anim_slot
     vxui_anim_state state;
 } vxui_anim_slot;
 
+typedef struct vxui_focus_ring_state
+{
+    bool valid;
+
+    float x_current;
+    float x_velocity;
+    float y_current;
+    float y_velocity;
+    float w_current;
+    float w_velocity;
+    float h_current;
+    float h_velocity;
+} vxui_focus_ring_state;
+
 typedef enum vxui_decl_kind
 {
     VXUI_DECL_LABEL,
@@ -291,7 +323,9 @@ typedef struct vxui_ctx
     char* anim_retained_text;
     int anim_retained_text_stride;
 
-    /* uint32_t focused_id; */
+    uint32_t focused_id;
+    uint32_t pending_focus_id;
+    vxui_focus_ring_state focus_ring_state;
 } vxui_ctx;
 
 uint64_t vxui_min_memory_size( void );
@@ -302,6 +336,12 @@ vxui_draw_list vxui_end( vxui_ctx* ctx );
 void vxui_flush_text( vxui_ctx* ctx );
 void vxui_set_fontcache( vxui_ctx* ctx, ve_fontcache* cache );
 void vxui_set_text_fn( vxui_ctx* ctx, const char* ( *fn )( const char* key, void* userdata ), void* userdata );
+void vxui_input_nav( vxui_ctx* ctx, vxui_dir dir );
+void vxui_input_confirm( vxui_ctx* ctx );
+void vxui_input_cancel( vxui_ctx* ctx );
+void vxui_input_tab( vxui_ctx* ctx, int direction );
+uint32_t vxui_focused_id( vxui_ctx* ctx );
+void vxui_set_focus( vxui_ctx* ctx, uint32_t id );
 void VXUI_LABEL( vxui_ctx* ctx, const char* l10n_key, vxui_label_cfg cfg );
 void VXUI_VALUE( vxui_ctx* ctx, const char* l10n_key, float value, vxui_value_cfg cfg );
 void VXUI_ACTION( vxui_ctx* ctx, const char* id, const char* l10n_key, vxui_action_fn fn, vxui_action_cfg cfg );
@@ -355,6 +395,15 @@ static void vxui__spring_step( float target, float* current, float* velocity, fl
 static bool vxui__anim_settled( const vxui_anim_state* st );
 static void vxui__mark_seen( vxui_anim_state* st, uint64_t frame_index, vxui_rect bounds );
 static void vxui__apply_anim_to_cmd( vxui_cmd* cmd, const vxui_anim_state* st );
+static vxui_decl* vxui__find_decl( vxui_ctx* ctx, uint32_t id );
+static vxui_rect vxui__decl_bounds( vxui_ctx* ctx, const vxui_decl* decl );
+static float vxui__nav_score( vxui_rect from, vxui_rect to, vxui_dir dir, bool* valid );
+static uint32_t vxui__resolve_nav_target( vxui_ctx* ctx, vxui_dir dir );
+static void vxui__resolve_focus( vxui_ctx* ctx );
+static void vxui__dispatch_confirm( vxui_ctx* ctx );
+static void vxui__focus_ring_set_target( vxui_ctx* ctx, vxui_rect bounds, bool snap );
+static void vxui__update_focus_ring( vxui_ctx* ctx );
+static void vxui__emit_focus_ring( vxui_ctx* ctx );
 static void vxui__scan_decl_anim_bounds( vxui_ctx* ctx );
 static void vxui__scan_clay_anim_states( vxui_ctx* ctx );
 static void vxui__update_anim_store( vxui_ctx* ctx );
@@ -827,6 +876,13 @@ static void vxui__apply_anim_to_cmd( vxui_cmd* cmd, const vxui_anim_state* st )
             cmd->rect_rounded.radius *= st->scale_current;
             break;
 
+        case VXUI_CMD_BORDER:
+            cmd->border.bounds = vxui__transform_rect( cmd->border.bounds, st );
+            cmd->border.color = vxui__apply_anim_color( cmd->border.color, st );
+            cmd->border.radius *= st->scale_current;
+            cmd->border.width *= st->scale_current;
+            break;
+
         case VXUI_CMD_IMAGE:
             cmd->image.bounds = vxui__transform_rect( cmd->image.bounds, st );
             break;
@@ -852,6 +908,294 @@ static void vxui__apply_anim_to_cmd( vxui_cmd* cmd, const vxui_anim_state* st )
             cmd->clip.rect = vxui__transform_rect( cmd->clip.rect, st );
             break;
     }
+}
+
+static vxui_decl* vxui__find_decl( vxui_ctx* ctx, uint32_t id )
+{
+    for ( int i = 0; i < ctx->decl_count; ++i ) {
+        if ( ctx->decls[ i ].id == id ) {
+            return &ctx->decls[ i ];
+        }
+    }
+    return nullptr;
+}
+
+static vxui_rect vxui__decl_bounds( vxui_ctx* ctx, const vxui_decl* decl )
+{
+    if ( !decl ) {
+        return vxui_rect {};
+    }
+
+    vxui_anim_state* st = vxui__get_anim_state( ctx, decl->id, false );
+    return st ? st->bounds : vxui_rect {};
+}
+
+static float vxui__nav_score( vxui_rect from, vxui_rect to, vxui_dir dir, bool* valid )
+{
+    float fx = from.x + from.w * 0.5f;
+    float fy = from.y + from.h * 0.5f;
+    float tx = to.x + to.w * 0.5f;
+    float ty = to.y + to.h * 0.5f;
+    float dx = tx - fx;
+    float dy = ty - fy;
+
+    *valid = false;
+    switch ( dir ) {
+        case VXUI_DIR_UP:
+            if ( dy >= 0.0f ) {
+                return 0.0f;
+            }
+            *valid = true;
+            return -dy * 10000.0f + std::fabs( dx );
+
+        case VXUI_DIR_DOWN:
+            if ( dy <= 0.0f ) {
+                return 0.0f;
+            }
+            *valid = true;
+            return dy * 10000.0f + std::fabs( dx );
+
+        case VXUI_DIR_LEFT:
+            if ( dx >= 0.0f ) {
+                return 0.0f;
+            }
+            *valid = true;
+            return -dx * 10000.0f + std::fabs( dy );
+
+        case VXUI_DIR_RIGHT:
+            if ( dx <= 0.0f ) {
+                return 0.0f;
+            }
+            *valid = true;
+            return dx * 10000.0f + std::fabs( dy );
+    }
+
+    return 0.0f;
+}
+
+static uint32_t vxui__resolve_nav_target( vxui_ctx* ctx, vxui_dir dir )
+{
+    vxui_decl* focused = vxui__find_decl( ctx, ctx->focused_id );
+    if ( !focused ) {
+        return ctx->focused_id;
+    }
+
+    uint32_t override_id = 0;
+    switch ( dir ) {
+        case VXUI_DIR_UP:
+            override_id = focused->nav_up;
+            break;
+        case VXUI_DIR_DOWN:
+            override_id = focused->nav_down;
+            break;
+        case VXUI_DIR_LEFT:
+            override_id = focused->nav_left;
+            break;
+        case VXUI_DIR_RIGHT:
+            override_id = focused->nav_right;
+            break;
+    }
+    if ( override_id != 0 ) {
+        vxui_decl* override_decl = vxui__find_decl( ctx, override_id );
+        if ( override_decl && override_decl->focusable && !override_decl->disabled ) {
+            return override_id;
+        }
+        return ctx->focused_id;
+    }
+
+    vxui_rect from = vxui__decl_bounds( ctx, focused );
+    bool found = false;
+    float best_score = 0.0f;
+    uint32_t best_id = ctx->focused_id;
+    for ( int i = 0; i < ctx->decl_count; ++i ) {
+        vxui_decl* candidate = &ctx->decls[ i ];
+        if ( !candidate->focusable || candidate->disabled || candidate->id == ctx->focused_id ) {
+            continue;
+        }
+
+        bool valid = false;
+        float score = vxui__nav_score( from, vxui__decl_bounds( ctx, candidate ), dir, &valid );
+        if ( !valid ) {
+            continue;
+        }
+
+        if ( !found || score < best_score ) {
+            found = true;
+            best_score = score;
+            best_id = candidate->id;
+        }
+    }
+
+    return best_id;
+}
+
+static void vxui__dispatch_confirm( vxui_ctx* ctx )
+{
+    if ( !ctx->pending_confirm ) {
+        return;
+    }
+
+    for ( int i = 0; i < ctx->decl_count; ++i ) {
+        vxui_decl* decl = &ctx->decls[ i ];
+        if ( decl->id != ctx->focused_id || decl->disabled || !decl->on_confirm ) {
+            continue;
+        }
+
+        decl->on_confirm( ctx, decl->id, decl->userdata );
+        break;
+    }
+}
+
+static void vxui__focus_ring_set_target( vxui_ctx* ctx, vxui_rect bounds, bool snap )
+{
+    vxui_focus_ring_state* ring = &ctx->focus_ring_state;
+    if ( snap || !ring->valid ) {
+        ring->x_current = bounds.x;
+        ring->y_current = bounds.y;
+        ring->w_current = bounds.w;
+        ring->h_current = bounds.h;
+        ring->x_velocity = 0.0f;
+        ring->y_velocity = 0.0f;
+        ring->w_velocity = 0.0f;
+        ring->h_velocity = 0.0f;
+        ring->valid = true;
+        return;
+    }
+
+    vxui__spring_step( bounds.x, &ring->x_current, &ring->x_velocity, ctx->cfg.focus_ring.spring_stiffness, ctx->cfg.focus_ring.spring_damping, ctx->delta_time );
+    vxui__spring_step( bounds.y, &ring->y_current, &ring->y_velocity, ctx->cfg.focus_ring.spring_stiffness, ctx->cfg.focus_ring.spring_damping, ctx->delta_time );
+    vxui__spring_step( bounds.w, &ring->w_current, &ring->w_velocity, ctx->cfg.focus_ring.spring_stiffness, ctx->cfg.focus_ring.spring_damping, ctx->delta_time );
+    vxui__spring_step( bounds.h, &ring->h_current, &ring->h_velocity, ctx->cfg.focus_ring.spring_stiffness, ctx->cfg.focus_ring.spring_damping, ctx->delta_time );
+}
+
+static void vxui__resolve_focus( vxui_ctx* ctx )
+{
+    vxui_decl* first_focusable = nullptr;
+    int focusable_count = 0;
+    int focused_index = -1;
+    for ( int i = 0; i < ctx->decl_count; ++i ) {
+        vxui_decl* decl = &ctx->decls[ i ];
+        if ( !decl->focusable || decl->disabled ) {
+            continue;
+        }
+        if ( !first_focusable ) {
+            first_focusable = decl;
+        }
+        if ( decl->id == ctx->focused_id ) {
+            focused_index = focusable_count;
+        }
+        focusable_count += 1;
+    }
+
+    if ( !first_focusable ) {
+        ctx->focused_id = 0;
+        ctx->focus_ring_state.valid = false;
+        ctx->pending_focus_id = 0;
+        return;
+    }
+
+    bool snap_ring = false;
+    if ( ctx->pending_focus_id != 0 ) {
+        vxui_decl* target = vxui__find_decl( ctx, ctx->pending_focus_id );
+        if ( target && target->focusable && !target->disabled ) {
+            snap_ring = ctx->focused_id == 0 || ctx->focused_id != target->id;
+            ctx->focused_id = target->id;
+        }
+        ctx->pending_focus_id = 0;
+    }
+
+    if ( ctx->focused_id == 0 || !vxui__find_decl( ctx, ctx->focused_id ) ) {
+        ctx->focused_id = first_focusable->id;
+        snap_ring = true;
+    }
+
+    if ( ctx->pending_tab != 0 && focusable_count > 0 ) {
+        focused_index = -1;
+        int current_index = 0;
+        for ( int i = 0; i < ctx->decl_count; ++i ) {
+            vxui_decl* decl = &ctx->decls[ i ];
+            if ( !decl->focusable || decl->disabled ) {
+                continue;
+            }
+            if ( decl->id == ctx->focused_id ) {
+                focused_index = current_index;
+                break;
+            }
+            current_index += 1;
+        }
+
+        int direction = ctx->pending_tab > 0 ? 1 : -1;
+        int target_index = focused_index >= 0 ? focused_index : 0;
+        target_index = ( target_index + direction + focusable_count ) % focusable_count;
+
+        int seen = 0;
+        for ( int i = 0; i < ctx->decl_count; ++i ) {
+            vxui_decl* decl = &ctx->decls[ i ];
+            if ( !decl->focusable || decl->disabled ) {
+                continue;
+            }
+            if ( seen == target_index ) {
+                snap_ring = ctx->focused_id == 0;
+                ctx->focused_id = decl->id;
+                break;
+            }
+            seen += 1;
+        }
+    }
+
+    for ( int dir = VXUI_DIR_UP; dir <= VXUI_DIR_RIGHT; ++dir ) {
+        if ( ( ctx->pending_nav_mask & ( 1u << dir ) ) == 0u ) {
+            continue;
+        }
+
+        uint32_t next = vxui__resolve_nav_target( ctx, ( vxui_dir ) dir );
+        if ( next != 0 ) {
+            snap_ring = false;
+            ctx->focused_id = next;
+        }
+    }
+
+    vxui__dispatch_confirm( ctx );
+}
+
+static void vxui__update_focus_ring( vxui_ctx* ctx )
+{
+    vxui_decl* decl = vxui__find_decl( ctx, ctx->focused_id );
+    if ( !decl || decl->no_focus_ring ) {
+        return;
+    }
+
+    vxui_rect bounds = vxui__decl_bounds( ctx, decl );
+    if ( bounds.w <= 0.0f && bounds.h <= 0.0f ) {
+        return;
+    }
+
+    bool snap = !ctx->focus_ring_state.valid;
+    vxui__focus_ring_set_target( ctx, bounds, snap );
+}
+
+static void vxui__emit_focus_ring( vxui_ctx* ctx )
+{
+    vxui_decl* decl = vxui__find_decl( ctx, ctx->focused_id );
+    if ( !decl || decl->no_focus_ring || !ctx->focus_ring_state.valid ) {
+        return;
+    }
+
+    vxui_cmd* cmd = vxui__push_cmd( ctx, VXUI_CMD_BORDER );
+    if ( !cmd ) {
+        return;
+    }
+
+    cmd->clip_rect = vxui_rect {};
+    cmd->border.bounds = ( vxui_rect ) {
+        ctx->focus_ring_state.x_current,
+        ctx->focus_ring_state.y_current,
+        ctx->focus_ring_state.w_current,
+        ctx->focus_ring_state.h_current,
+    };
+    cmd->border.color = ctx->cfg.focus_ring.color;
+    cmd->border.radius = ctx->cfg.focus_ring.corner_radius;
+    cmd->border.width = ctx->cfg.focus_ring.border_width;
 }
 
 static void vxui__scan_decl_anim_bounds( vxui_ctx* ctx )
@@ -880,6 +1224,7 @@ static void vxui__scan_clay_anim_states( vxui_ctx* ctx )
 
         switch ( src->commandType ) {
             case CLAY_RENDER_COMMAND_TYPE_RECTANGLE:
+            case CLAY_RENDER_COMMAND_TYPE_BORDER:
             case CLAY_RENDER_COMMAND_TYPE_TEXT:
             case CLAY_RENDER_COMMAND_TYPE_IMAGE:
             case CLAY_RENDER_COMMAND_TYPE_SCISSOR_START:
@@ -894,7 +1239,6 @@ static void vxui__scan_clay_anim_states( vxui_ctx* ctx )
             }
 
             case CLAY_RENDER_COMMAND_TYPE_NONE:
-            case CLAY_RENDER_COMMAND_TYPE_BORDER:
             case CLAY_RENDER_COMMAND_TYPE_CUSTOM:
             default:
                 break;
@@ -1073,6 +1417,23 @@ static void vxui__translate_clay_commands( vxui_ctx* ctx )
                 break;
             }
 
+            case CLAY_RENDER_COMMAND_TYPE_BORDER: {
+                const Clay_BorderRenderData* border = &src->renderData.border;
+                vxui_cmd* cmd = vxui__push_cmd( ctx, VXUI_CMD_BORDER );
+                if ( !cmd ) {
+                    break;
+                }
+
+                cmd->clip_rect = ctx->current_clip_rect;
+                cmd->border.bounds = vxui__rect_from_clay_box( src->boundingBox );
+                cmd->border.color = vxui__color_from_clay( border->color );
+                cmd->border.radius = border->cornerRadius.topLeft;
+                cmd->border.width = ( float ) border->width.left;
+                vxui__capture_retained_cmd( ctx, src->id, cmd );
+                vxui__apply_anim_to_cmd( cmd, st );
+                break;
+            }
+
             case CLAY_RENDER_COMMAND_TYPE_TEXT: {
                 const Clay_TextRenderData* text = &src->renderData.text;
                 const char* copied = vxui__copy_slice_text( ctx, text->stringContents );
@@ -1152,7 +1513,6 @@ static void vxui__translate_clay_commands( vxui_ctx* ctx )
             }
 
             case CLAY_RENDER_COMMAND_TYPE_NONE:
-            case CLAY_RENDER_COMMAND_TYPE_BORDER:
             case CLAY_RENDER_COMMAND_TYPE_CUSTOM:
             default:
                 assert( false && "unsupported clay render command" );
@@ -1366,6 +1726,10 @@ vxui_draw_list vxui_end( vxui_ctx* ctx )
         vxui__translate_clay_commands( ctx );
     }
 
+    vxui__resolve_focus( ctx );
+    vxui__update_focus_ring( ctx );
+    vxui__emit_focus_ring( ctx );
+
     list.commands = ctx->commands;
     list.length = ctx->command_count;
     return list;
@@ -1385,6 +1749,40 @@ void vxui_set_text_fn( vxui_ctx* ctx, const char* ( *fn )( const char* key, void
 {
     ctx->text_fn = fn;
     ctx->text_fn_userdata = userdata;
+}
+
+void vxui_input_nav( vxui_ctx* ctx, vxui_dir dir )
+{
+    if ( dir < VXUI_DIR_UP || dir > VXUI_DIR_RIGHT ) {
+        return;
+    }
+    ctx->pending_nav_mask |= 1u << dir;
+}
+
+void vxui_input_confirm( vxui_ctx* ctx )
+{
+    ctx->pending_confirm = true;
+}
+
+void vxui_input_cancel( vxui_ctx* ctx )
+{
+    ctx->pending_cancel = true;
+}
+
+void vxui_input_tab( vxui_ctx* ctx, int direction )
+{
+    ctx->pending_tab = direction;
+}
+
+uint32_t vxui_focused_id( vxui_ctx* ctx )
+{
+    return ctx->focused_id;
+}
+
+void vxui_set_focus( vxui_ctx* ctx, uint32_t id )
+{
+    ctx->focused_id = id;
+    ctx->pending_focus_id = id;
 }
 
 void VXUI_LABEL( vxui_ctx* ctx, const char* l10n_key, vxui_label_cfg cfg )

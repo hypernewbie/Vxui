@@ -898,7 +898,7 @@ static void vxui_demo_render_fontcache_drawlist( vxui_demo_renderer* renderer, c
             }
             glUniform1i( glGetUniformLocation( renderer->fontcache_shader_draw_text, "src_texture" ), 0 );
 #ifdef VE_FONTCACHE_FREETYPE_RASTERISATION
-            if ( dcall.pass == VE_FONTCACHE_FRAMEBUFFER_PASS_TARGET_CPU_CACHED ) {
+            if ( dcall.pass == VE_FONTCACHE_FRAMEBUFFER_PASS_TARGET_CPU_CACHED && !renderer->cpu_atlas_textures.empty() ) {
                 glUniform1ui( glGetUniformLocation( renderer->fontcache_shader_draw_text, "downsample" ), 0 );
                 glActiveTexture( GL_TEXTURE0 );
                 glBindTexture( GL_TEXTURE_2D, renderer->cpu_atlas_textures[ dcall.atlas_page ] );
@@ -1083,40 +1083,73 @@ static bool vxui_demo_gamepad_down( const TinyWindow::gamepad_t* gamepad, int bu
 
 int main( void )
 {
-    TinyWindow::windowSetting_t cfg;
-    cfg.name = "VXUI";
-    cfg.versionMajor = 3;
-    cfg.versionMinor = 3;
-    cfg.enableSRGB = true;
-    cfg.resolution.width = 1280;
-    cfg.resolution.height = 720;
-    cfg.SetProfile( TinyWindow::profile_t::core );
+    // Disable MSVC CRT error dialogs
+    _set_error_mode( _OUT_TO_STDERR );
+    _CrtSetReportMode( _CRT_ERROR, _CRTDBG_MODE_FILE );
+    _CrtSetReportFile( _CRT_ERROR, _CRTDBG_FILE_STDERR );
+    _CrtSetReportMode( _CRT_ASSERT, _CRTDBG_MODE_FILE );
+    _CrtSetReportFile( _CRT_ASSERT, _CRTDBG_FILE_STDERR );
+    _CrtSetReportMode( _CRT_WARN, _CRTDBG_MODE_FILE );
+    _CrtSetReportFile( _CRT_WARN, _CRTDBG_FILE_STDERR );
+    SetErrorMode( SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX );
 
-    std::unique_ptr< TinyWindow::windowManager > manager( new TinyWindow::windowManager() );
-    std::unique_ptr< TinyWindow::tWindow > window( manager->AddWindow( cfg ) );
-    if ( !window || !window->initialized || !window->contextCreated ) {
-        std::fprintf( stderr, "Failed to create the TinyWindow demo window.\n" );
-        window.reset( nullptr );
-        manager->ShutDown();
-        return 1;
-    }
+     TinyWindow::windowSetting_t cfg;
+     cfg.name = "VXUI";
+     cfg.versionMajor = 3;
+     cfg.versionMinor = 3;
+     cfg.enableSRGB = false;
+     cfg.resolution.width = 1280;
+     cfg.resolution.height = 720;
+     cfg.SetProfile( TinyWindow::profile_t::core );
+
+     std::unique_ptr< TinyWindow::windowManager > manager( new TinyWindow::windowManager() );
+     std::unique_ptr< TinyWindow::tWindow > window( manager->AddWindow( cfg ) );
+     if ( !window ) {
+         std::fprintf( stderr, "Failed to create the TinyWindow demo window: AddWindow returned null.\n" );
+         manager->ShutDown();
+         return 1;
+     }
+
+     // Note: TinyWindow's 'initialized' flag is not reliably set to true on the Windows path
+     // in this vendored version. We rely on contextCreated and valid handles instead.
+     // The initialized value is retained here for debug visibility only.
+     HWND winHandle = window->GetWindowHandle();
+     HDC devCtx = window->GetDeviceContextDeviceHandle();
+     if ( !winHandle || !devCtx ) {
+         std::fprintf( stderr, "TinyWindow created no usable Win32 window handle or device context.\n" );
+         std::fprintf( stderr, "initialized=%d contextCreated=%d windowHandle=%p deviceContextHandle=%p\n",
+             window->initialized, window->contextCreated, ( void* ) winHandle, ( void* ) devCtx );
+         window.reset( nullptr );
+         manager->ShutDown();
+         return 1;
+     }
+
+     HGLRC glCtx = window->GetGLRenderingContextHandle();
+     if ( !window->contextCreated || !glCtx ) {
+         std::fprintf( stderr, "TinyWindow failed to create an OpenGL context.\n" );
+         std::fprintf( stderr, "initialized=%d contextCreated=%d glRenderingContextHandle=%p\n",
+             window->initialized, window->contextCreated, ( void* ) glCtx );
+         window.reset( nullptr );
+         manager->ShutDown();
+         return 1;
+     }
 
     if ( !gladLoadGL() ) {
-        std::fprintf( stderr, "Failed to load OpenGL symbols through glad.\n" );
-        window.reset( nullptr );
-        manager->ShutDown();
-        return 1;
-    }
+         std::fprintf( stderr, "Failed to load OpenGL symbols through glad.\n" );
+         window.reset( nullptr );
+         manager->ShutDown();
+         return 1;
+     }
 
     vxui_demo_renderer renderer = {};
     renderer.window_size = window->settings.resolution;
     if ( !vxui_demo_init_renderer( &renderer ) || !vxui_demo_load_fonts( &renderer ) ) {
-        std::fprintf( stderr, "Failed to initialize the VXUI demo renderer.\n" );
-        vxui_demo_shutdown_renderer( &renderer );
-        window.reset( nullptr );
-        manager->ShutDown();
-        return 1;
-    }
+         std::fprintf( stderr, "Failed to initialize the VXUI demo renderer.\n" );
+         vxui_demo_shutdown_renderer( &renderer );
+         window.reset( nullptr );
+         manager->ShutDown();
+         return 1;
+     }
 
     ve_fontcache_configure_snap( &renderer.cache, renderer.window_size.width, renderer.window_size.height );
 
@@ -1223,7 +1256,7 @@ int main( void )
     };
     vxui_register_seq( &ctx, "settings_enter", settings_enter, ( int ) ( sizeof( settings_enter ) / sizeof( settings_enter[ 0 ] ) ) );
     vxui_register_seq( &ctx, "settings_exit", settings_exit, ( int ) ( sizeof( settings_exit ) / sizeof( settings_exit[ 0 ] ) ) );
-    vxui_push_screen( &ctx, "main_menu" );
+     vxui_push_screen( &ctx, "main_menu" );
     vxui_demo_refresh_status( &app );
 
     std::chrono::steady_clock::time_point previous = std::chrono::steady_clock::now();

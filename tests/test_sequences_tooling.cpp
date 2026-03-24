@@ -37,7 +37,7 @@ UTEST_F_SETUP( sequences_tooling_fixture )
 
 UTEST_F_TEARDOWN( sequences_tooling_fixture )
 {
-    Clay_SetCurrentContext( nullptr );
+    vxui_shutdown( &utest_fixture->ctx );
     std::remove( utest_fixture->temp_path );
     std::free( utest_fixture->memory );
     utest_fixture->memory = nullptr;

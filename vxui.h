@@ -596,6 +596,7 @@ static inline Clay_ElementDeclaration vxui__rtl_decl( vxui_ctx* ctx, Clay_Elemen
 uint64_t vxui_min_memory_size( void );
 vxui_arena vxui_create_arena( uint64_t size, void* memory );
 void vxui_init( vxui_ctx* ctx, vxui_arena arena, vxui_config cfg );
+void vxui_shutdown( vxui_ctx* ctx );
 void vxui_begin( vxui_ctx* ctx, float delta_time );
 vxui_draw_list vxui_end( vxui_ctx* ctx );
 void vxui_flush_text( vxui_ctx* ctx );
@@ -3312,6 +3313,22 @@ void vxui_init( vxui_ctx* ctx, vxui_arena arena, vxui_config cfg )
     vxui__register_builtin_traits( ctx );
 
     vxui__reset_frame_buffers( ctx );
+}
+
+void vxui_shutdown( vxui_ctx* ctx )
+{
+    if ( !ctx ) return;
+    if ( ctx->clay_ctx ) {
+        if ( Clay_GetCurrentContext() == ctx->clay_ctx ) {
+            Clay_SetCurrentContext( nullptr );
+        }
+        ctx->clay_ctx = nullptr;
+        ctx->clay_arena.memory = nullptr;
+        ctx->clay_arena.capacity = 0;
+    }
+    if ( vxui__current_ctx == ctx ) {
+        vxui__current_ctx = nullptr;
+    }
 }
 
 void vxui_begin( vxui_ctx* ctx, float delta_time )

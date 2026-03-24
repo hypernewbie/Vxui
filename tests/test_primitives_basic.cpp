@@ -58,7 +58,7 @@ UTEST_F_SETUP( primitives_fixture )
 
 UTEST_F_TEARDOWN( primitives_fixture )
 {
-    Clay_SetCurrentContext( nullptr );
+    vxui_shutdown( &utest_fixture->ctx );
     std::free( utest_fixture->memory );
     utest_fixture->memory = nullptr;
     utest_fixture->memory_size = 0;

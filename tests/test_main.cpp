@@ -167,7 +167,7 @@ UTEST( smoke, fontcache_with_vxui_ctx_and_text )
     int64_t id = vxui_test_fontcache_load_file( fc, VXUI_SOURCE_DIR "/vefc/demo/fonts/OpenSans-Regular.ttf", 24.0f );
     ASSERT_TRUE( id >= 0 );
 
-    std::vector< uint8_t > memory( 512 * 1024 );
+    std::vector< uint8_t > memory( ( size_t ) vxui_min_memory_size() );
     vxui_ctx ctx = {};
     vxui_init( &ctx, vxui_create_arena( ( uint64_t ) memory.size(), memory.data() ), ( vxui_config ) {
         .screen_width = 1280,
@@ -195,6 +195,7 @@ UTEST( smoke, fontcache_with_vxui_ctx_and_text )
     vxui_draw_list list = vxui_end( &ctx );
     ( void ) list;
 
+    vxui_shutdown( &ctx );
     vxui_test_fontcache_destroy( fc );
 }
 

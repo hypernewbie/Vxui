@@ -74,7 +74,7 @@ UTEST( soak, long_frame_loop_over_springs )
         EXPECT_TRUE( list.length > 0 );
     }
 
-    Clay_SetCurrentContext( nullptr );
+    vxui_shutdown( &ctx );
     std::free( memory );
 }
 
@@ -98,7 +98,7 @@ UTEST( soak, repeated_push_pop )
     }
 
     EXPECT_TRUE( ctx.screen_count >= 0 );
-    Clay_SetCurrentContext( nullptr );
+    vxui_shutdown( &ctx );
     std::free( memory );
 }
 
@@ -153,7 +153,7 @@ UTEST( soak, repeated_sequence_fire_stop_reload_cycles )
     }
 
     std::remove( temp_path.c_str() );
-    Clay_SetCurrentContext( nullptr );
+    vxui_shutdown( &ctx );
     std::free( memory );
 }
 
@@ -185,7 +185,7 @@ UTEST( soak, repeated_locale_and_input_table_swaps )
         EXPECT_TRUE( list.length > 0 );
     }
 
-    Clay_SetCurrentContext( nullptr );
+    vxui_shutdown( &ctx );
     std::free( memory );
 }
 
@@ -211,7 +211,7 @@ UTEST( soak, repeated_trait_attachment_many_elements )
         EXPECT_TRUE( list.length > 0 );
     }
 
-    Clay_SetCurrentContext( nullptr );
+    vxui_shutdown( &ctx );
     std::free( memory );
 }
 
@@ -247,6 +247,6 @@ UTEST( soak, navigation_spam_across_asymmetric_layouts )
         EXPECT_TRUE( list.length > 0 );
     }
 
-    Clay_SetCurrentContext( nullptr );
+    vxui_shutdown( &ctx );
     std::free( memory );
 }

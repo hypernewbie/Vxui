@@ -86,7 +86,7 @@ UTEST_F_SETUP( traits_fixture )
 
 UTEST_F_TEARDOWN( traits_fixture )
 {
-    Clay_SetCurrentContext( nullptr );
+    vxui_shutdown( &utest_fixture->ctx );
     std::free( utest_fixture->memory );
     utest_fixture->memory = nullptr;
     utest_fixture->memory_size = 0;

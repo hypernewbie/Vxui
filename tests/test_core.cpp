@@ -55,6 +55,8 @@ UTEST( core, init_stores_config_and_zeroes_transient_state )
     EXPECT_FALSE( ctx.pending_confirm );
     EXPECT_FALSE( ctx.pending_cancel );
     EXPECT_EQ( ctx.pending_tab, 0 );
+
+    vxui_shutdown( &ctx );
 }
 
 UTEST( core, begin_resets_per_frame_latches )
@@ -80,6 +82,8 @@ UTEST( core, begin_resets_per_frame_latches )
     EXPECT_FALSE( ctx.pending_confirm );
     EXPECT_FALSE( ctx.pending_cancel );
     EXPECT_EQ( ctx.pending_tab, 0 );
+
+    vxui_shutdown( &ctx );
 }
 
 UTEST( core, end_returns_empty_draw_list )
@@ -93,6 +97,8 @@ UTEST( core, end_returns_empty_draw_list )
 
     EXPECT_EQ( list.commands, ctx.commands );
     EXPECT_EQ( list.length, 0 );
+
+    vxui_shutdown( &ctx );
 }
 
 UTEST( ids, match_clay_literal )
@@ -123,6 +129,8 @@ UTEST( core, allocations_are_aligned_from_misaligned_base )
     ASSERT_TRUE( ctx.text_queue != nullptr );
     EXPECT_EQ( ( uintptr_t ) ctx.commands % alignof( vxui_cmd ), ( uintptr_t ) 0 );
     EXPECT_EQ( ( uintptr_t ) ctx.text_queue % alignof( vxui_draw_cmd_text ), ( uintptr_t ) 0 );
+
+    vxui_shutdown( &ctx );
 }
 
 UTEST( core, tiny_arena_gracefully_reports_no_capacity )
@@ -138,6 +146,8 @@ UTEST( core, tiny_arena_gracefully_reports_no_capacity )
     EXPECT_EQ( ctx.command_capacity, 0 );
     EXPECT_EQ( ctx.text_queue, nullptr );
     EXPECT_EQ( ctx.text_queue_capacity, 0 );
+
+    vxui_shutdown( &ctx );
 }
 
 UTEST( core, begin_end_cycles_do_not_leak_counts )
@@ -154,6 +164,8 @@ UTEST( core, begin_end_cycles_do_not_leak_counts )
         EXPECT_EQ( ctx.command_count, 0 );
         EXPECT_EQ( ctx.text_queue_count, 0 );
     }
+
+    vxui_shutdown( &ctx );
 }
 
 UTEST( core, separate_contexts_do_not_cross_contaminate )
@@ -171,4 +183,36 @@ UTEST( core, separate_contexts_do_not_cross_contaminate )
 
     EXPECT_FALSE( ctx_b.pending_confirm );
     EXPECT_TRUE( ctx_a.commands != ctx_b.commands );
+
+    vxui_shutdown( &ctx_a );
+    vxui_shutdown( &ctx_b );
+}
+
+UTEST( core, shutdown_enables_subsequent_min_memory_size )
+{
+    {
+        std::vector< uint8_t > memory( 4096 );
+        vxui_ctx ctx = {};
+        vxui_init( &ctx, vxui_create_arena( ( uint64_t ) memory.size(), memory.data() ), vxui__test_config() );
+        vxui_begin( &ctx, 0.016f );
+        ( void ) vxui_end( &ctx );
+        vxui_shutdown( &ctx );
+    }
+
+    EXPECT_TRUE( vxui_min_memory_size() > 0 );
+}
+
+UTEST( core, shutdown_is_idempotent )
+{
+    std::vector< uint8_t > memory( 4096 );
+    vxui_ctx ctx = {};
+
+    vxui_init( &ctx, vxui_create_arena( ( uint64_t ) memory.size(), memory.data() ), vxui__test_config() );
+    vxui_begin( &ctx, 0.016f );
+    ( void ) vxui_end( &ctx );
+
+    vxui_shutdown( &ctx );
+    vxui_shutdown( &ctx );
+
+    EXPECT_TRUE( vxui_min_memory_size() > 0 );
 }

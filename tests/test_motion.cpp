@@ -60,7 +60,7 @@ UTEST_F_SETUP( motion_fixture )
 
 UTEST_F_TEARDOWN( motion_fixture )
 {
-    Clay_SetCurrentContext( nullptr );
+    vxui_shutdown( &utest_fixture->ctx );
     std::free( utest_fixture->memory );
     utest_fixture->memory = nullptr;
     utest_fixture->memory_size = 0;
@@ -139,7 +139,7 @@ UTEST_F( motion_fixture, unseen_states_eventually_settle_and_evict )
 
 UTEST_F( motion_fixture, timeout_evicts_even_if_not_fully_settled )
 {
-    Clay_SetCurrentContext( nullptr );
+    vxui_shutdown( &utest_fixture->ctx );
     vxui_init(
         &utest_fixture->ctx,
         vxui_create_arena( utest_fixture->memory_size, utest_fixture->memory ),

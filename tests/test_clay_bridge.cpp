@@ -29,7 +29,7 @@ UTEST_F_SETUP( clay_bridge_fixture )
 
 UTEST_F_TEARDOWN( clay_bridge_fixture )
 {
-    Clay_SetCurrentContext( nullptr );
+    vxui_shutdown( &utest_fixture->ctx );
     std::free( utest_fixture->memory );
     utest_fixture->memory = nullptr;
     utest_fixture->memory_size = 0;

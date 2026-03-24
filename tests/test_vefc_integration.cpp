@@ -30,7 +30,7 @@ UTEST( vefc_integration, layout_measurement_does_not_mutate_vefc_drawlist )
     int64_t font_id = vxui_test_fontcache_load_file( fc, kOpenSansPath, 24.0f );
     ASSERT_TRUE( font_id >= 0 );
 
-    std::vector< uint8_t > memory( 512 * 1024 );
+    std::vector< uint8_t > memory( ( size_t ) vxui_min_memory_size() );
     vxui_ctx ctx = {};
     vxui_init( &ctx, vxui_create_arena( ( uint64_t ) memory.size(), memory.data() ), vxui__test_config() );
     vxui_set_fontcache( &ctx, vxui_test_fontcache_ptr( fc ) );
@@ -54,6 +54,7 @@ UTEST( vefc_integration, layout_measurement_does_not_mutate_vefc_drawlist )
     EXPECT_EQ( vxui_test_fontcache_drawlist_index_count( fc ), ( size_t ) 0 );
     EXPECT_EQ( vxui_test_fontcache_drawlist_texel_count( fc ), ( size_t ) 0 );
 
+    vxui_shutdown( &ctx );
     vxui_test_fontcache_destroy( fc );
 }
 
@@ -65,7 +66,7 @@ UTEST( vefc_integration, layout_measurement_does_not_create_cpu_atlas_pages )
     int64_t font_id = vxui_test_fontcache_load_file( fc, kOpenSansPath, 24.0f );
     ASSERT_TRUE( font_id >= 0 );
 
-    std::vector< uint8_t > memory( 512 * 1024 );
+    std::vector< uint8_t > memory( ( size_t ) vxui_min_memory_size() );
     vxui_ctx ctx = {};
     vxui_init( &ctx, vxui_create_arena( ( uint64_t ) memory.size(), memory.data() ), vxui__test_config() );
     vxui_set_fontcache( &ctx, vxui_test_fontcache_ptr( fc ) );
@@ -88,6 +89,7 @@ UTEST( vefc_integration, layout_measurement_does_not_create_cpu_atlas_pages )
     EXPECT_EQ( vxui_test_fontcache_cpu_atlas_dcall_count( fc ), ( size_t ) 0 );
     EXPECT_EQ( vxui_test_fontcache_cpu_atlas_texel_count( fc ), ( size_t ) 0 );
 
+    vxui_shutdown( &ctx );
     vxui_test_fontcache_destroy( fc );
 }
 
@@ -99,7 +101,7 @@ UTEST( vefc_integration, first_real_draw_after_layout_still_emits_cpu_atlas_setu
     int64_t font_id = vxui_test_fontcache_load_file( fc, kOpenSansPath, 24.0f );
     ASSERT_TRUE( font_id >= 0 );
 
-    std::vector< uint8_t > memory( 512 * 1024 );
+    std::vector< uint8_t > memory( ( size_t ) vxui_min_memory_size() );
     vxui_ctx ctx = {};
     vxui_init( &ctx, vxui_create_arena( ( uint64_t ) memory.size(), memory.data() ), vxui__test_config() );
     vxui_set_fontcache( &ctx, vxui_test_fontcache_ptr( fc ) );
@@ -126,5 +128,6 @@ UTEST( vefc_integration, first_real_draw_after_layout_still_emits_cpu_atlas_setu
     EXPECT_TRUE( vxui_test_fontcache_has_atlas_upload_pass( fc ) );
     EXPECT_TRUE( vxui_test_fontcache_has_target_cpu_cached_pass( fc ) );
 
+    vxui_shutdown( &ctx );
     vxui_test_fontcache_destroy( fc );
 }

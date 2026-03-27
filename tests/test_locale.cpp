@@ -1,7 +1,9 @@
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
+#include <string>
 
+#include "../demo_layout_contract.h"
 #include "../third_party/utest.h"
 #include "../vxui.h"
 #include "test_support.h"
@@ -63,6 +65,9 @@ static const char* vxui__locale_text( const char* key, void* userdata )
     if ( std::strcmp( key, "status.label.screens" ) == 0 ) {
         return fixture->ctx.rtl ? "الشاشات" : "Screens";
     }
+    if ( std::strcmp( key, "status.label.top" ) == 0 ) {
+        return fixture->ctx.rtl ? "الأعلى" : "Top";
+    }
 
     return key;
 }
@@ -98,6 +103,29 @@ static bool vxui__locale_find_text_pos( const vxui_draw_list* list, const char* 
     return false;
 }
 
+static bool vxui__locale_text_starts_with( const char* text, const char* prefix )
+{
+    return text && prefix && std::strncmp( text, prefix, std::strlen( prefix ) ) == 0;
+}
+
+static bool vxui__locale_any_slot_text_below( const vxui_draw_list* list, float y_limit )
+{
+    if ( !list ) {
+        return false;
+    }
+
+    for ( int i = 0; i < list->length; ++i ) {
+        if ( list->commands[ i ].type != VXUI_CMD_TEXT || !vxui__locale_text_starts_with( list->commands[ i ].text.text, "slot." ) ) {
+            continue;
+        }
+        const float clip_bottom = list->commands[ i ].clip_rect.y + list->commands[ i ].clip_rect.h;
+        if ( list->commands[ i ].text.pos.y >= y_limit && clip_bottom > y_limit ) {
+            return true;
+        }
+    }
+    return false;
+}
+
 static bool vxui__locale_find_anim_bounds( const vxui_ctx* ctx, uint32_t id, vxui_rect* out )
 {
     if ( !ctx || !ctx->anim_slots || ctx->anim_capacity <= 0 ) {
@@ -115,6 +143,32 @@ static bool vxui__locale_find_anim_bounds( const vxui_ctx* ctx, uint32_t id, vxu
         return true;
     }
     return false;
+}
+
+static Clay_String vxui__locale_clay_string( const char* text )
+{
+    return ( Clay_String ) {
+        .isStaticallyAllocated = false,
+        .length = text ? ( int32_t ) std::strlen( text ) : 0,
+        .chars = text ? text : "",
+    };
+}
+
+static bool vxui__locale_find_element_bounds( const char* id, vxui_rect* out )
+{
+    Clay_ElementData element = Clay_GetElementData( Clay_GetElementId( vxui__locale_clay_string( id ) ) );
+    if ( !element.found ) {
+        return false;
+    }
+    if ( out ) {
+        *out = {
+            element.boundingBox.x,
+            element.boundingBox.y,
+            element.boundingBox.width,
+            element.boundingBox.height,
+        };
+    }
+    return true;
 }
 
 static bool vxui__locale_matches( const char* locale, const char* prefix )
@@ -165,6 +219,467 @@ static void vxui__locale_font_resolver(
         default:
             return;
     }
+}
+
+template <typename TEmitControl>
+static void vxui__locale_emit_form_row(
+    locale_fixture* fixture,
+    const char* id,
+    const char* label_key,
+    float label_lane_width,
+    float control_lane_width,
+    bool rtl,
+    TEmitControl&& emit_control )
+{
+    CLAY( Clay_GetElementId( vxui__locale_clay_string( id ) ), {
+        .layout = {
+            .sizing = { CLAY_SIZING_GROW( 0 ), CLAY_SIZING_FIT( 0 ) },
+            .childGap = ( uint16_t ) VXUI_DEMO_LAYOUT_ROW_GAP,
+            .childAlignment = { .y = CLAY_ALIGN_Y_CENTER },
+            .layoutDirection = CLAY_LEFT_TO_RIGHT,
+        },
+    } ) {
+        auto emit_label_lane = [&]() {
+            const std::string label_lane_id = std::string( id ) + ".label_lane";
+            CLAY( Clay_GetElementId( vxui__locale_clay_string( label_lane_id.c_str() ) ), {
+                .layout = {
+                    .sizing = { CLAY_SIZING_FIXED( label_lane_width ), CLAY_SIZING_FIT( 0 ) },
+                    .childAlignment = { .x = rtl ? CLAY_ALIGN_X_RIGHT : CLAY_ALIGN_X_LEFT },
+                },
+            } ) {
+                VXUI_LABEL( &fixture->ctx, label_key, ( vxui_label_cfg ) { 0 } );
+            }
+        };
+
+        auto emit_control_lane = [&]() {
+            const std::string control_lane_id = std::string( id ) + ".control";
+            CLAY( Clay_GetElementId( vxui__locale_clay_string( control_lane_id.c_str() ) ), {
+                .layout = {
+                    .sizing = { CLAY_SIZING_FIXED( control_lane_width ), CLAY_SIZING_FIT( 0 ) },
+                    .childAlignment = { .x = rtl ? CLAY_ALIGN_X_RIGHT : CLAY_ALIGN_X_LEFT },
+                    .layoutDirection = CLAY_TOP_TO_BOTTOM,
+                },
+            } ) {
+                emit_control();
+            }
+        };
+
+        if ( rtl ) {
+            emit_control_lane();
+            emit_label_lane();
+        } else {
+            emit_label_lane();
+            emit_control_lane();
+        }
+    }
+}
+
+static void vxui__locale_emit_compact_meta_row( locale_fixture* fixture, const char* id, const char* label_key, const char* value_key, bool rtl )
+{
+    CLAY( Clay_GetElementId( vxui__locale_clay_string( id ) ), {
+        .layout = {
+            .sizing = { CLAY_SIZING_FIT( 0 ), CLAY_SIZING_FIT( 0 ) },
+            .childGap = ( uint16_t ) VXUI_DEMO_LAYOUT_INLINE_GAP,
+            .childAlignment = { .y = CLAY_ALIGN_Y_CENTER },
+            .layoutDirection = CLAY_LEFT_TO_RIGHT,
+        },
+    } ) {
+        if ( rtl ) {
+            VXUI_LABEL( &fixture->ctx, value_key, ( vxui_label_cfg ) { 0 } );
+            VXUI_LABEL( &fixture->ctx, label_key, ( vxui_label_cfg ) { 0 } );
+        } else {
+            VXUI_LABEL( &fixture->ctx, label_key, ( vxui_label_cfg ) { 0 } );
+            VXUI_LABEL( &fixture->ctx, value_key, ( vxui_label_cfg ) { 0 } );
+        }
+    }
+}
+
+static void vxui__locale_emit_status_summary(
+    locale_fixture* fixture,
+    const char* id,
+    const char* locale_name_key,
+    const char* prompt_name_key,
+    const char* top_name_key,
+    int screen_count,
+    bool rtl )
+{
+    const std::string primary_id = std::string( id ) + ".row.primary";
+    const std::string secondary_id = std::string( id ) + ".row.secondary";
+    const std::string locale_id = std::string( id ) + ".locale";
+    const std::string prompts_id = std::string( id ) + ".prompts";
+    const std::string screens_id = std::string( id ) + ".screens";
+    const std::string top_id = std::string( id ) + ".top";
+
+    CLAY( Clay_GetElementId( vxui__locale_clay_string( id ) ), {
+        .layout = {
+            .sizing = { CLAY_SIZING_GROW( 0 ), CLAY_SIZING_FIT( 0 ) },
+            .childGap = ( uint16_t ) VXUI_DEMO_LAYOUT_ROW_GAP,
+            .layoutDirection = CLAY_TOP_TO_BOTTOM,
+        },
+    } ) {
+        CLAY( Clay_GetElementId( vxui__locale_clay_string( primary_id.c_str() ) ), {
+            .layout = {
+                .sizing = { CLAY_SIZING_GROW( 0 ), CLAY_SIZING_FIT( 0 ) },
+                .childGap = ( uint16_t ) VXUI_DEMO_LAYOUT_ROW_GAP,
+                .layoutDirection = CLAY_LEFT_TO_RIGHT,
+            },
+        } ) {
+            vxui__locale_emit_compact_meta_row( fixture, locale_id.c_str(), "status.label.locale", locale_name_key, rtl );
+            vxui__locale_emit_compact_meta_row( fixture, prompts_id.c_str(), "status.label.prompts", prompt_name_key, rtl );
+        }
+
+        CLAY( Clay_GetElementId( vxui__locale_clay_string( secondary_id.c_str() ) ), {
+            .layout = {
+                .sizing = { CLAY_SIZING_GROW( 0 ), CLAY_SIZING_FIT( 0 ) },
+                .childGap = ( uint16_t ) VXUI_DEMO_LAYOUT_ROW_GAP,
+                .layoutDirection = CLAY_LEFT_TO_RIGHT,
+            },
+        } ) {
+            CLAY( Clay_GetElementId( vxui__locale_clay_string( screens_id.c_str() ) ), {
+                .layout = {
+                    .sizing = { CLAY_SIZING_FIT( 0 ), CLAY_SIZING_FIT( 0 ) },
+                },
+            } ) {
+                VXUI_VALUE( &fixture->ctx, "status.label.screens", ( float ) screen_count, ( vxui_value_cfg ) {
+                    .font_id = VXUI_TEST_FONT_ROLE_BODY,
+                    .font_size = 24.0f,
+                    .format = "%.0f",
+                } );
+            }
+            vxui__locale_emit_compact_meta_row( fixture, top_id.c_str(), "status.label.top", top_name_key, rtl );
+        }
+    }
+}
+
+static void vxui__locale_emit_controls_block( locale_fixture* fixture, const char* id )
+{
+    static const char* kHints[] = {
+        "hint.controls.0",
+        "hint.controls.1",
+        "hint.controls.2",
+        "hint.controls.3",
+    };
+
+    CLAY( Clay_GetElementId( vxui__locale_clay_string( id ) ), {
+        .layout = {
+            .sizing = { CLAY_SIZING_GROW( 0 ), CLAY_SIZING_FIT( 0 ) },
+            .padding = CLAY_PADDING_ALL( 18 ),
+            .childGap = ( uint16_t ) VXUI_DEMO_LAYOUT_ROW_GAP,
+            .layoutDirection = CLAY_TOP_TO_BOTTOM,
+        },
+    } ) {
+        VXUI_LABEL( &fixture->ctx, "menu.controls", ( vxui_label_cfg ) {
+            .font_id = VXUI_TEST_FONT_ROLE_BODY,
+            .font_size = 24.0f,
+        } );
+        for ( const char* hint : kHints ) {
+            VXUI_LABEL( &fixture->ctx, hint, ( vxui_label_cfg ) { 0 } );
+        }
+    }
+}
+
+static vxui_draw_list vxui__locale_render_settings_desktop_impl(
+    locale_fixture* fixture,
+    const char* locale,
+    int screen_height,
+    int extra_body_rows,
+    float body_scroll_offset,
+    const char* focused_id )
+{
+    static const char* kDifficultyKeys[] = { "difficulty.easy", "difficulty.normal", "difficulty.hard" };
+    static const char* kSlotKeys[] = { "slot.0", "slot.1", "slot.2", "slot.3", "slot.4", "slot.5", "slot.6", "slot.7" };
+
+    fixture->ctx.cfg.screen_width = 1280;
+    fixture->ctx.cfg.screen_height = screen_height;
+    vxui_set_font_resolver( &fixture->ctx, vxui__locale_font_resolver, fixture );
+    vxui_set_locale( &fixture->ctx, locale );
+    fixture->ctx.focused_id = focused_id ? vxui_id( focused_id ) : 0u;
+
+    const bool rtl = fixture->ctx.rtl;
+    const vxui_demo_surface_metrics metrics =
+        vxui_demo_compute_surface_metrics( 1280.0f - VXUI_DEMO_LAYOUT_OUTER_PADDING * 2.0f, locale, VXUI_DEMO_SURFACE_SETTINGS );
+
+    int difficulty = 1;
+    float volume = 0.40f;
+    vxui_begin( &fixture->ctx, 0.016f );
+    VXUI( &fixture->ctx, "settings", {
+        .layout = {
+            .sizing = { CLAY_SIZING_GROW( 0 ), CLAY_SIZING_GROW( 0 ) },
+            .padding = CLAY_PADDING_ALL( ( uint16_t ) VXUI_DEMO_LAYOUT_OUTER_PADDING ),
+            .childAlignment = { .x = CLAY_ALIGN_X_CENTER },
+            .layoutDirection = CLAY_TOP_TO_BOTTOM,
+        },
+    } ) {
+        VXUI( &fixture->ctx, "settings.surface", {
+            .layout = {
+                .sizing = {
+                    CLAY_SIZING_FIXED( metrics.surface_width ),
+                    CLAY_SIZING_FIXED( ( float ) fixture->ctx.cfg.screen_height - VXUI_DEMO_LAYOUT_OUTER_PADDING * 2.0f ),
+                },
+                .padding = {
+                    ( uint16_t ) VXUI_DEMO_LAYOUT_SURFACE_PADDING_X,
+                    ( uint16_t ) VXUI_DEMO_LAYOUT_SURFACE_PADDING_X,
+                    ( uint16_t ) VXUI_DEMO_LAYOUT_SURFACE_PADDING_Y,
+                    ( uint16_t ) VXUI_DEMO_LAYOUT_SURFACE_PADDING_Y,
+                },
+                .childGap = ( uint16_t ) VXUI_DEMO_LAYOUT_SECTION_GAP,
+                .childAlignment = { .x = rtl ? CLAY_ALIGN_X_RIGHT : CLAY_ALIGN_X_LEFT },
+                .layoutDirection = CLAY_TOP_TO_BOTTOM,
+            },
+        } ) {
+            VXUI( &fixture->ctx, "settings.header", {
+                .layout = {
+                    .sizing = { CLAY_SIZING_GROW( 0 ), CLAY_SIZING_FIT( 0 ) },
+                    .padding = { 6, 0, 0, 0 },
+                    .layoutDirection = CLAY_TOP_TO_BOTTOM,
+                },
+            } ) {
+                VXUI( &fixture->ctx, "settings.title", {
+                    .layout = {
+                        .sizing = { CLAY_SIZING_GROW( 0 ), CLAY_SIZING_FIT( 0 ) },
+                        .layoutDirection = CLAY_TOP_TO_BOTTOM,
+                    },
+                } ) {
+                    VXUI_LABEL( &fixture->ctx, "label.title", ( vxui_label_cfg ) {
+                        .font_id = VXUI_TEST_FONT_ROLE_TITLE,
+                        .font_size = 44.0f,
+                    } );
+                }
+            }
+
+            VXUI( &fixture->ctx, "settings.body_viewport", {
+                .layout = {
+                    .sizing = { CLAY_SIZING_GROW( 0 ), CLAY_SIZING_GROW( 160.0f ) },
+                    .layoutDirection = CLAY_TOP_TO_BOTTOM,
+                },
+            } ) {
+                CLAY( Clay_GetElementId( vxui__locale_clay_string( "settings.body_scroll" ) ), {
+                    .layout = {
+                        .sizing = { CLAY_SIZING_GROW( 0 ), CLAY_SIZING_GROW( 0 ) },
+                        .layoutDirection = CLAY_TOP_TO_BOTTOM,
+                    },
+                    .clip = {
+                        .horizontal = true,
+                        .vertical = true,
+                        .childOffset = { 0.0f, -body_scroll_offset },
+                    },
+                } ) {
+                    VXUI( &fixture->ctx, "settings.body", {
+                        .layout = {
+                            .sizing = { CLAY_SIZING_GROW( 0 ), CLAY_SIZING_FIT( 0 ) },
+                            .childGap = ( uint16_t ) VXUI_DEMO_LAYOUT_SECTION_GAP,
+                            .layoutDirection = CLAY_TOP_TO_BOTTOM,
+                        },
+                    } ) {
+                    VXUI( &fixture->ctx, "settings.controls_section", {
+                        .layout = {
+                            .sizing = { CLAY_SIZING_GROW( 0 ), CLAY_SIZING_FIT( 0 ) },
+                            .padding = CLAY_PADDING_ALL( 18 ),
+                            .childGap = ( uint16_t ) VXUI_DEMO_LAYOUT_ROW_GAP,
+                            .layoutDirection = CLAY_TOP_TO_BOTTOM,
+                        },
+                    } ) {
+                        vxui__locale_emit_form_row( fixture, "settings.form.difficulty.row", "label.left", metrics.label_lane_width, metrics.control_lane_width, rtl, [&]() {
+                            VXUI_OPTION( &fixture->ctx, "settings.difficulty", &difficulty, kDifficultyKeys, 3, ( vxui_option_cfg ) { 0 } );
+                        } );
+                        vxui__locale_emit_form_row( fixture, "settings.form.volume.row", "label.right", metrics.label_lane_width, metrics.control_lane_width, rtl, [&]() {
+                            VXUI_SLIDER( &fixture->ctx, "settings.volume", &volume, 0.0f, 1.0f, ( vxui_slider_cfg ) {
+                                .show_value = true,
+                            } );
+                        } );
+                    }
+
+                    VXUI( &fixture->ctx, "settings.saves_section", {
+                        .layout = {
+                            .sizing = { CLAY_SIZING_GROW( 0 ), CLAY_SIZING_FIT( 0 ) },
+                            .padding = CLAY_PADDING_ALL( 16 ),
+                            .childGap = 10,
+                            .layoutDirection = CLAY_TOP_TO_BOTTOM,
+                        },
+                    } ) {
+                        VXUI_LABEL( &fixture->ctx, "label.body", ( vxui_label_cfg ) { 0 } );
+                        VXUI( &fixture->ctx, "settings.saves.row", {
+                            .layout = {
+                                .sizing = { CLAY_SIZING_GROW( 0 ), CLAY_SIZING_FIT( 0 ) },
+                                .childGap = ( uint16_t ) VXUI_DEMO_LAYOUT_ROW_GAP,
+                                .layoutDirection = CLAY_LEFT_TO_RIGHT,
+                            },
+                        } ) {
+                            auto emit_spacer_lane = [&]() {
+                                CLAY( Clay_GetElementId( vxui__locale_clay_string( "settings.saves.spacer" ) ), {
+                                    .layout = {
+                                        .sizing = { CLAY_SIZING_FIXED( metrics.label_lane_width ), CLAY_SIZING_FIT( 0 ) },
+                                    },
+                                } ) {}
+                            };
+
+                            auto emit_list_lane = [&]() {
+                                CLAY( Clay_GetElementId( vxui__locale_clay_string( "settings.saves.lane" ) ), {
+                                    .layout = {
+                                        .sizing = { CLAY_SIZING_FIXED( metrics.control_lane_width ), CLAY_SIZING_FIT( 0 ) },
+                                        .childGap = 8,
+                                        .layoutDirection = CLAY_TOP_TO_BOTTOM,
+                                    },
+                                } ) {
+                                    const int slot_count = 8 + extra_body_rows;
+                                    for ( int i = 0; i < slot_count; ++i ) {
+                                        std::string slot_id = "settings.saves.slot." + std::to_string( i );
+                                        std::string slot_label = i < 8 ? kSlotKeys[ i ] : ( "slot." + std::to_string( i ) );
+                                        CLAY( Clay_GetElementId( vxui__locale_clay_string( slot_id.c_str() ) ), {
+                                            .layout = {
+                                                .sizing = { CLAY_SIZING_FIXED( metrics.control_lane_width ), CLAY_SIZING_FIXED( 44.0f ) },
+                                                .padding = { 14, 14, 8, 8 },
+                                                .childAlignment = { .x = rtl ? CLAY_ALIGN_X_RIGHT : CLAY_ALIGN_X_LEFT, .y = CLAY_ALIGN_Y_CENTER },
+                                            },
+                                        } ) {
+                                            VXUI_LABEL( &fixture->ctx, slot_label.c_str(), ( vxui_label_cfg ) { 0 } );
+                                        }
+                                    }
+                                }
+                            };
+
+                            if ( rtl ) {
+                                emit_list_lane();
+                                emit_spacer_lane();
+                            } else {
+                                emit_spacer_lane();
+                                emit_list_lane();
+                            }
+                        }
+                    }
+                    }
+                }
+            }
+
+            VXUI( &fixture->ctx, "settings.footer", {
+                .layout = {
+                    .sizing = { CLAY_SIZING_GROW( 0 ), CLAY_SIZING_FIT( 0 ) },
+                    .padding = CLAY_PADDING_ALL( 18 ),
+                    .childGap = ( uint16_t ) VXUI_DEMO_LAYOUT_ROW_GAP,
+                    .layoutDirection = CLAY_TOP_TO_BOTTOM,
+                },
+            } ) {
+                VXUI( &fixture->ctx, "settings.footer.actions", {
+                    .layout = {
+                        .sizing = { CLAY_SIZING_GROW( 0 ), CLAY_SIZING_FIT( 0 ) },
+                        .childGap = ( uint16_t ) VXUI_DEMO_LAYOUT_ROW_GAP,
+                        .layoutDirection = CLAY_LEFT_TO_RIGHT,
+                    },
+                } ) {
+                    VXUI_LABEL( &fixture->ctx, "label.hello", ( vxui_label_cfg ) { 0 } );
+                    VXUI_LABEL( &fixture->ctx, "label.body", ( vxui_label_cfg ) { 0 } );
+                }
+                VXUI( &fixture->ctx, "settings.status", {
+                    .layout = {
+                        .sizing = { CLAY_SIZING_GROW( 0 ), CLAY_SIZING_FIT( 0 ) },
+                    },
+                } ) {
+                    vxui__locale_emit_status_summary( fixture, "settings.status.summary", "label.hello", "label.right", "label.left", 2, rtl );
+                }
+            }
+        }
+    }
+    return vxui_end( &fixture->ctx );
+}
+
+static void vxui__locale_render_settings_desktop( locale_fixture* fixture, const char* locale )
+{
+    ( void ) vxui__locale_render_settings_desktop_impl( fixture, locale, 720, 0, 0.0f, nullptr );
+}
+
+static void vxui__locale_render_settings_desktop_overflow( locale_fixture* fixture, const char* locale )
+{
+    ( void ) vxui__locale_render_settings_desktop_impl( fixture, locale, 520, 10, 0.0f, nullptr );
+}
+
+static void vxui__locale_render_main_menu_desktop( locale_fixture* fixture, const char* locale )
+{
+    vxui_input_table table = {
+        .confirm = { VXUI_TEST_FONT_ROLE_BODY, 'A' },
+        .cancel = { VXUI_TEST_FONT_ROLE_BODY, 'B' },
+    };
+
+    fixture->ctx.cfg.screen_width = 1280;
+    fixture->ctx.cfg.screen_height = 720;
+    vxui_set_font_resolver( &fixture->ctx, vxui__locale_font_resolver, fixture );
+    vxui_set_input_table( &fixture->ctx, &table );
+    vxui_set_locale( &fixture->ctx, locale );
+
+    const bool rtl = fixture->ctx.rtl;
+    const vxui_demo_surface_metrics metrics =
+        vxui_demo_compute_surface_metrics( 1280.0f - VXUI_DEMO_LAYOUT_OUTER_PADDING * 2.0f, locale, VXUI_DEMO_SURFACE_MAIN_MENU );
+
+    vxui_begin( &fixture->ctx, 0.016f );
+    VXUI( &fixture->ctx, "main_menu", {
+        .layout = {
+            .sizing = { CLAY_SIZING_GROW( 0 ), CLAY_SIZING_GROW( 0 ) },
+            .padding = CLAY_PADDING_ALL( ( uint16_t ) VXUI_DEMO_LAYOUT_OUTER_PADDING ),
+            .childAlignment = { .x = CLAY_ALIGN_X_CENTER },
+            .layoutDirection = CLAY_TOP_TO_BOTTOM,
+        },
+    } ) {
+        VXUI( &fixture->ctx, "main.surface", {
+            .layout = {
+                .sizing = { CLAY_SIZING_FIXED( metrics.surface_width ), CLAY_SIZING_FIT( 0 ) },
+                .padding = {
+                    ( uint16_t ) VXUI_DEMO_LAYOUT_SURFACE_PADDING_X,
+                    ( uint16_t ) VXUI_DEMO_LAYOUT_SURFACE_PADDING_X,
+                    ( uint16_t ) VXUI_DEMO_LAYOUT_SURFACE_PADDING_Y,
+                    ( uint16_t ) VXUI_DEMO_LAYOUT_SURFACE_PADDING_Y,
+                },
+                .childGap = ( uint16_t ) VXUI_DEMO_LAYOUT_SECTION_GAP,
+                .childAlignment = { .x = rtl ? CLAY_ALIGN_X_RIGHT : CLAY_ALIGN_X_LEFT },
+                .layoutDirection = CLAY_TOP_TO_BOTTOM,
+            },
+        } ) {
+            VXUI( &fixture->ctx, "main.hero", {
+                .layout = {
+                    .sizing = { CLAY_SIZING_GROW( 0 ), CLAY_SIZING_FIT( 0 ) },
+                    .padding = CLAY_PADDING_ALL( 20 ),
+                    .childGap = 14,
+                    .layoutDirection = CLAY_TOP_TO_BOTTOM,
+                },
+            } ) {
+                VXUI_LABEL( &fixture->ctx, "label.title", ( vxui_label_cfg ) {
+                    .font_id = VXUI_TEST_FONT_ROLE_TITLE,
+                    .font_size = 44.0f,
+                } );
+                VXUI_LABEL( &fixture->ctx, "label.hello", ( vxui_label_cfg ) { 0 } );
+            }
+
+            VXUI( &fixture->ctx, "main.meta", {
+                .layout = {
+                    .sizing = { CLAY_SIZING_GROW( 0 ), CLAY_SIZING_FIT( 0 ) },
+                    .padding = CLAY_PADDING_ALL( 18 ),
+                    .childGap = ( uint16_t ) VXUI_DEMO_LAYOUT_ROW_GAP,
+                    .layoutDirection = CLAY_TOP_TO_BOTTOM,
+                },
+            } ) {
+                VXUI( &fixture->ctx, "main.prompts", {
+                    .layout = {
+                        .sizing = { CLAY_SIZING_FIT( 0 ), CLAY_SIZING_FIT( 0 ) },
+                        .childGap = ( uint16_t ) VXUI_DEMO_LAYOUT_INLINE_GAP,
+                        .layoutDirection = CLAY_LEFT_TO_RIGHT,
+                    },
+                } ) {
+                    VXUI_PROMPT( &fixture->ctx, "action.confirm" );
+                    VXUI_LABEL( &fixture->ctx, "label.hello", ( vxui_label_cfg ) { 0 } );
+                    VXUI_PROMPT( &fixture->ctx, "action.cancel" );
+                    VXUI_LABEL( &fixture->ctx, "label.right", ( vxui_label_cfg ) { 0 } );
+                }
+                VXUI( &fixture->ctx, "main.status", {
+                    .layout = {
+                        .sizing = { CLAY_SIZING_GROW( 0 ), CLAY_SIZING_FIT( 0 ) },
+                    },
+                } ) {
+                    vxui__locale_emit_status_summary( fixture, "main.status.summary", "label.hello", "label.right", "label.left", 1, rtl );
+                }
+            }
+
+            vxui__locale_emit_controls_block( fixture, "main.help" );
+        }
+    }
+    vxui_end( &fixture->ctx );
 }
 
 UTEST_F_SETUP( locale_fixture )
@@ -748,44 +1263,54 @@ UTEST_F( locale_fixture, rtl_text_stays_within_screen_bounds )
     }
 }
 
-UTEST_F( locale_fixture, content_column_bounds_child_elements )
+UTEST_F( locale_fixture, settings_surface_is_desktop_scale )
 {
-    vxui_set_locale_font( &utest_fixture->ctx, "en", VXUI_TEST_FONT_UI );
-    vxui_set_locale( &utest_fixture->ctx, "en" );
+    const char* locales[] = { "en", "ja-JP", "ar" };
+    const vxui_demo_surface_contract contract = vxui_demo_get_surface_contract( VXUI_DEMO_SURFACE_SETTINGS );
+    for ( const char* locale : locales ) {
+        vxui__locale_render_settings_desktop( utest_fixture, locale );
 
-    utest_fixture->ctx.cfg.screen_width = 1280;
-    utest_fixture->ctx.cfg.screen_height = 720;
+        vxui_rect root = {};
+        vxui_rect surface = {};
+        vxui_rect header = {};
+        vxui_rect body_viewport = {};
+        vxui_rect body_scroll = {};
+        vxui_rect footer = {};
+        vxui_rect controls = {};
+        vxui_rect saves = {};
+        ASSERT_TRUE( vxui__locale_find_element_bounds( "settings", &root ) );
+        ASSERT_TRUE( vxui__locale_find_element_bounds( "settings.surface", &surface ) );
+        ASSERT_TRUE( vxui__locale_find_element_bounds( "settings.header", &header ) );
+        ASSERT_TRUE( vxui__locale_find_element_bounds( "settings.body_viewport", &body_viewport ) );
+        ASSERT_TRUE( vxui__locale_find_element_bounds( "settings.body_scroll", &body_scroll ) );
+        ASSERT_TRUE( vxui__locale_find_element_bounds( "settings.footer", &footer ) );
+        ASSERT_TRUE( vxui__locale_find_element_bounds( "settings.controls_section", &controls ) );
+        ASSERT_TRUE( vxui__locale_find_element_bounds( "settings.saves_section", &saves ) );
 
-    vxui_begin( &utest_fixture->ctx, 0.016f );
-    VXUI( &utest_fixture->ctx, "screen", {
-        .layout = {
-            .sizing = { CLAY_SIZING_GROW( 0 ), CLAY_SIZING_GROW( 0 ) },
-            .padding = CLAY_PADDING_ALL( 18 ),
-        },
-    } ) {
-        VXUI( &utest_fixture->ctx, "content", {
-            .layout = {
-                .sizing = { CLAY_SIZING_GROW( 0, 620.0f ), CLAY_SIZING_FIT( 0 ) },
-                .childGap = 16,
-                .childAlignment = { .x = CLAY_ALIGN_X_LEFT },
-                .layoutDirection = CLAY_TOP_TO_BOTTOM,
-            },
-        } ) {
-            VXUI_LABEL( &utest_fixture->ctx, "label.hello", ( vxui_label_cfg ) { 0 } );
-        }
+        EXPECT_NEAR( root.w, ( float ) utest_fixture->ctx.cfg.screen_width, 1.0f );
+        EXPECT_NEAR( root.h, ( float ) utest_fixture->ctx.cfg.screen_height, 1.0f );
+        EXPECT_GT( surface.w, contract.desktop_min_surface_width );
+        EXPECT_LT( header.y, body_scroll.y );
+        EXPECT_NEAR( body_viewport.y, body_scroll.y, 1.0f );
+        EXPECT_NEAR( body_viewport.h, body_scroll.h, 1.0f );
+        EXPECT_LT( body_scroll.y, footer.y );
+        EXPECT_GE( body_scroll.h, 160.0f );
+        EXPECT_GE( controls.y, body_scroll.y );
+        EXPECT_GE( saves.y, controls.y );
+        EXPECT_LE( footer.y + footer.h, surface.y + surface.h + 1.0f );
+        EXPECT_GE( surface.x, VXUI_DEMO_LAYOUT_OUTER_PADDING );
+        EXPECT_LE( surface.x + surface.w, ( float ) utest_fixture->ctx.cfg.screen_width - VXUI_DEMO_LAYOUT_OUTER_PADDING + 1.0f );
     }
-    vxui_draw_list list = vxui_end( &utest_fixture->ctx );
+}
 
-    float screen_w = ( float ) utest_fixture->ctx.cfg.screen_width;
-    float max_content_w = 620.0f;
-    float max_allowed_right = 18.0f + max_content_w;
-
-    for ( int i = 0; i < list.length; ++i ) {
-        if ( list.commands[ i ].type != VXUI_CMD_TEXT ) continue;
-        float right_edge = list.commands[ i ].text.pos.x;
-        EXPECT_LT( right_edge, max_allowed_right + 100.0f );
-        EXPECT_LE( right_edge, screen_w );
-    }
+UTEST_F( locale_fixture, demo_motion_contract_targets_bounded_surfaces )
+{
+    EXPECT_STREQ( vxui_demo_root_id( VXUI_DEMO_SURFACE_SETTINGS ), "settings" );
+    EXPECT_STREQ( vxui_demo_surface_id( VXUI_DEMO_SURFACE_SETTINGS ), "settings.surface" );
+    EXPECT_STREQ( vxui_demo_root_id( VXUI_DEMO_SURFACE_MAIN_MENU ), "main_menu" );
+    EXPECT_STREQ( vxui_demo_surface_id( VXUI_DEMO_SURFACE_MAIN_MENU ), "main.surface" );
+    EXPECT_NE( std::strcmp( vxui_demo_root_id( VXUI_DEMO_SURFACE_SETTINGS ), vxui_demo_surface_id( VXUI_DEMO_SURFACE_SETTINGS ) ), 0 );
+    EXPECT_NE( std::strcmp( vxui_demo_root_id( VXUI_DEMO_SURFACE_MAIN_MENU ), vxui_demo_surface_id( VXUI_DEMO_SURFACE_MAIN_MENU ) ), 0 );
 }
 
 UTEST_F( locale_fixture, screen_stack_text_reuse_drawlist_valid )
@@ -1079,196 +1604,137 @@ UTEST_F( locale_fixture, form_controls_share_alignment )
     EXPECT_LT( std::abs( x_diff ), 50.0f );
 }
 
-UTEST_F( locale_fixture, main_menu_hero_above_meta )
+UTEST_F( locale_fixture, main_menu_surface_is_desktop_scale )
 {
-    vxui_input_table table = {
-        .confirm = { VXUI_TEST_FONT_ROLE_BODY, 'A' },
-    };
-    vxui_set_input_table( &utest_fixture->ctx, &table );
-    vxui_set_locale( &utest_fixture->ctx, "en" );
+    const char* locales[] = { "en", "ja-JP", "ar" };
+    const vxui_demo_surface_contract contract = vxui_demo_get_surface_contract( VXUI_DEMO_SURFACE_MAIN_MENU );
+    for ( const char* locale : locales ) {
+        vxui__locale_render_main_menu_desktop( utest_fixture, locale );
 
-    vxui_begin( &utest_fixture->ctx, 0.016f );
-    VXUI( &utest_fixture->ctx, "root", {
-        .layout = {
-            .sizing = { CLAY_SIZING_FIXED( 640 ), CLAY_SIZING_GROW( 0 ) },
-            .padding = CLAY_PADDING_ALL( 18 ),
-            .childGap = 16,
-            .layoutDirection = CLAY_TOP_TO_BOTTOM,
-        },
-    } ) {
-        CLAY( CLAY_ID( "hero" ), {
-            .layout = {
-                .sizing = { CLAY_SIZING_FIT( 0 ), CLAY_SIZING_FIT( 0 ) },
-                .childGap = 0,
-                .layoutDirection = CLAY_TOP_TO_BOTTOM,
-            },
-        } ) {
-            VXUI_LABEL( &utest_fixture->ctx, "label.title", ( vxui_label_cfg ) {
-                .font_id = VXUI_TEST_FONT_ROLE_TITLE,
-                .font_size = 44.0f,
-            } );
-        }
-        CLAY( CLAY_ID( "meta" ), {
-            .layout = {
-                .sizing = { CLAY_SIZING_FIT( 0 ), CLAY_SIZING_FIT( 0 ) },
-                .childGap = 12,
-                .layoutDirection = CLAY_TOP_TO_BOTTOM,
-            },
-        } ) {
-            CLAY( CLAY_ID( "meta_prompts" ), {
-                .layout = {
-                    .sizing = { CLAY_SIZING_FIT( 0 ), CLAY_SIZING_FIT( 0 ) },
-                    .childGap = 8,
-                    .childAlignment = { .y = CLAY_ALIGN_Y_CENTER },
-                    .layoutDirection = CLAY_LEFT_TO_RIGHT,
-                },
-            } ) {
-                VXUI_PROMPT( &utest_fixture->ctx, "action.confirm" );
-                VXUI_LABEL( &utest_fixture->ctx, "label.hello", ( vxui_label_cfg ) {
-                    .font_id = VXUI_TEST_FONT_ROLE_BODY,
-                    .font_size = 24.0f,
-                } );
-            }
-        }
+        vxui_rect root = {};
+        vxui_rect surface = {};
+        vxui_rect hero = {};
+        vxui_rect meta = {};
+        vxui_rect help = {};
+        ASSERT_TRUE( vxui__locale_find_element_bounds( "main_menu", &root ) );
+        ASSERT_TRUE( vxui__locale_find_element_bounds( "main.surface", &surface ) );
+        ASSERT_TRUE( vxui__locale_find_element_bounds( "main.hero", &hero ) );
+        ASSERT_TRUE( vxui__locale_find_element_bounds( "main.meta", &meta ) );
+        ASSERT_TRUE( vxui__locale_find_element_bounds( "main.help", &help ) );
+
+        EXPECT_NEAR( root.w, ( float ) utest_fixture->ctx.cfg.screen_width, 1.0f );
+        EXPECT_NEAR( root.h, ( float ) utest_fixture->ctx.cfg.screen_height, 1.0f );
+        EXPECT_GT( surface.w, contract.desktop_min_surface_width );
+        EXPECT_LT( hero.y, meta.y );
+        EXPECT_LT( meta.y, help.y );
+        EXPECT_GE( hero.w, surface.w * 0.70f );
+        EXPECT_GE( meta.w, surface.w * 0.68f );
+        EXPECT_GE( help.w, surface.w * 0.68f );
     }
-    vxui_draw_list list = vxui_end( &utest_fixture->ctx );
-
-    vxui_vec2 title_pos = {};
-    vxui_vec2 meta_pos = {};
-    ASSERT_TRUE( vxui__locale_find_text_pos( &list, "Typography", &title_pos ) );
-    ASSERT_TRUE( vxui__locale_find_text_pos( &list, "A", &meta_pos ) );
-    EXPECT_LT( title_pos.y, meta_pos.y );
 }
 
-UTEST_F( locale_fixture, main_menu_help_below_meta )
+UTEST_F( locale_fixture, main_menu_meta_rows_do_not_collapse_into_narrow_mobile_column )
 {
-    vxui_input_table table = {
-        .confirm = { VXUI_TEST_FONT_ROLE_BODY, 'A' },
-    };
-    vxui_set_input_table( &utest_fixture->ctx, &table );
-    vxui_set_locale( &utest_fixture->ctx, "en" );
+    const char* locales[] = { "en", "ja-JP", "ar" };
+    for ( const char* locale : locales ) {
+        vxui__locale_render_main_menu_desktop( utest_fixture, locale );
 
-    vxui_begin( &utest_fixture->ctx, 0.016f );
-    VXUI( &utest_fixture->ctx, "root", {
-        .layout = {
-            .sizing = { CLAY_SIZING_FIXED( 640 ), CLAY_SIZING_GROW( 0 ) },
-            .padding = CLAY_PADDING_ALL( 18 ),
-            .childGap = 16,
-            .layoutDirection = CLAY_TOP_TO_BOTTOM,
-        },
-    } ) {
-        CLAY( CLAY_ID( "meta" ), {
-            .layout = {
-                .sizing = { CLAY_SIZING_FIT( 0 ), CLAY_SIZING_FIT( 0 ) },
-                .childGap = 12,
-                .layoutDirection = CLAY_TOP_TO_BOTTOM,
-            },
-        } ) {
-            CLAY( CLAY_ID( "meta_prompts" ), {
-                .layout = {
-                    .sizing = { CLAY_SIZING_FIT( 0 ), CLAY_SIZING_FIT( 0 ) },
-                    .childGap = 8,
-                    .childAlignment = { .y = CLAY_ALIGN_Y_CENTER },
-                    .layoutDirection = CLAY_LEFT_TO_RIGHT,
-                },
-            } ) {
-                VXUI_PROMPT( &utest_fixture->ctx, "action.confirm" );
-                VXUI_LABEL( &utest_fixture->ctx, "label.hello", ( vxui_label_cfg ) {
-                    .font_id = VXUI_TEST_FONT_ROLE_BODY,
-                    .font_size = 24.0f,
-                } );
-            }
-        }
-        CLAY( CLAY_ID( "help" ), {
-            .layout = {
-                .sizing = { CLAY_SIZING_GROW( 0 ), CLAY_SIZING_FIT( 0 ) },
-                .childGap = 12,
-                .layoutDirection = CLAY_TOP_TO_BOTTOM,
-            },
-        } ) {
-            VXUI_LABEL( &utest_fixture->ctx, "label.body", ( vxui_label_cfg ) {
-                .font_id = VXUI_TEST_FONT_ROLE_BODY,
-                .font_size = 24.0f,
-            } );
-        }
+        vxui_rect surface = {};
+        vxui_rect meta = {};
+        vxui_rect primary_row = {};
+        vxui_rect secondary_row = {};
+        ASSERT_TRUE( vxui__locale_find_element_bounds( "main.surface", &surface ) );
+        ASSERT_TRUE( vxui__locale_find_element_bounds( "main.meta", &meta ) );
+        ASSERT_TRUE( vxui__locale_find_element_bounds( "main.status.summary.row.primary", &primary_row ) );
+        ASSERT_TRUE( vxui__locale_find_element_bounds( "main.status.summary.row.secondary", &secondary_row ) );
+
+        EXPECT_GE( meta.w, surface.w * 0.68f );
+        EXPECT_GE( primary_row.w, meta.w * 0.60f );
+        EXPECT_GE( secondary_row.w, meta.w * 0.60f );
+        EXPECT_LT( primary_row.y, secondary_row.y );
     }
-    vxui_draw_list list = vxui_end( &utest_fixture->ctx );
-
-    vxui_vec2 meta_pos = {};
-    vxui_vec2 help_pos = {};
-    ASSERT_TRUE( vxui__locale_find_text_pos( &list, "A", &meta_pos ) );
-    ASSERT_TRUE( vxui__locale_find_text_pos( &list, "Typography", &help_pos ) );
-    EXPECT_LT( meta_pos.y, help_pos.y );
 }
 
-UTEST_F( locale_fixture, settings_screen_sections_within_content_column )
+UTEST_F( locale_fixture, settings_form_uses_shared_label_and_control_lanes )
 {
-    vxui_set_locale( &utest_fixture->ctx, "en" );
+    const char* locales[] = { "en", "ja-JP", "ar" };
+    for ( const char* locale : locales ) {
+        vxui__locale_render_settings_desktop( utest_fixture, locale );
 
-    vxui_begin( &utest_fixture->ctx, 0.016f );
-    VXUI( &utest_fixture->ctx, "root", {
-        .layout = {
-            .sizing = { CLAY_SIZING_FIXED( 640 ), CLAY_SIZING_GROW( 0 ) },
-            .padding = CLAY_PADDING_ALL( 18 ),
-        },
-    } ) {
-        VXUI( &utest_fixture->ctx, "content", {
-            .layout = {
-                .sizing = { CLAY_SIZING_GROW( 0, 620.0f ), CLAY_SIZING_FIT( 0 ) },
-                .childGap = 16,
-                .layoutDirection = CLAY_TOP_TO_BOTTOM,
-            },
-        } ) {
-            VXUI( &utest_fixture->ctx, "title", {
-                .layout = {
-                    .sizing = { CLAY_SIZING_FIT( 0 ), CLAY_SIZING_FIT( 0 ) },
-                    .childGap = 0,
-                    .layoutDirection = CLAY_TOP_TO_BOTTOM,
-                },
-            } ) {
-                VXUI_LABEL( &utest_fixture->ctx, "label.title", ( vxui_label_cfg ) {
-                    .font_id = VXUI_TEST_FONT_ROLE_TITLE,
-                    .font_size = 44.0f,
-                } );
-            }
-            VXUI( &utest_fixture->ctx, "form", {
-                .layout = {
-                    .sizing = { CLAY_SIZING_GROW( 0 ), CLAY_SIZING_FIT( 0 ) },
-                    .childGap = 12,
-                    .layoutDirection = CLAY_TOP_TO_BOTTOM,
-                },
-            } ) {
-                CLAY( CLAY_ID( "form_row" ), {
-                    .layout = {
-                        .sizing = { CLAY_SIZING_GROW( 0 ), CLAY_SIZING_FIT( 0 ) },
-                        .childGap = 12,
-                        .childAlignment = { .y = CLAY_ALIGN_Y_CENTER },
-                        .layoutDirection = CLAY_LEFT_TO_RIGHT,
-                    },
-                } ) {
-                    CLAY( CLAY_ID( "form_label" ), {
-                        .layout = {
-                            .sizing = { CLAY_SIZING_FIXED( 140.0f ), CLAY_SIZING_FIT( 0 ) },
-                        },
-                    } ) {
-                        VXUI_LABEL( &utest_fixture->ctx, "label.hello", ( vxui_label_cfg ) {
-                            .font_id = VXUI_TEST_FONT_ROLE_BODY,
-                            .font_size = 24.0f,
-                        } );
-                    }
-                    VXUI_VALUE( &utest_fixture->ctx, "form.value", 1.0f, ( vxui_value_cfg ) {
-                        .font_id = VXUI_TEST_FONT_ROLE_BODY,
-                        .font_size = 24.0f,
-                        .format = "%.0f",
-                    } );
-                }
-            }
-        }
+        vxui_rect surface = {};
+        vxui_rect difficulty_label = {};
+        vxui_rect volume_label = {};
+        vxui_rect difficulty_control = {};
+        vxui_rect volume_control = {};
+        ASSERT_TRUE( vxui__locale_find_element_bounds( "settings.surface", &surface ) );
+        ASSERT_TRUE( vxui__locale_find_element_bounds( "settings.form.difficulty.row.label_lane", &difficulty_label ) );
+        ASSERT_TRUE( vxui__locale_find_element_bounds( "settings.form.volume.row.label_lane", &volume_label ) );
+        ASSERT_TRUE( vxui__locale_find_element_bounds( "settings.form.difficulty.row.control", &difficulty_control ) );
+        ASSERT_TRUE( vxui__locale_find_element_bounds( "settings.form.volume.row.control", &volume_control ) );
+
+        EXPECT_NEAR( difficulty_label.x, volume_label.x, 1.0f );
+        EXPECT_NEAR( difficulty_label.w, volume_label.w, 1.0f );
+        EXPECT_NEAR( difficulty_control.x, volume_control.x, 1.0f );
+        EXPECT_NEAR( difficulty_control.w, volume_control.w, 1.0f );
+        EXPECT_GE( difficulty_control.w, surface.w * 0.45f );
     }
-    vxui_draw_list list = vxui_end( &utest_fixture->ctx );
+}
 
-    vxui_vec2 form_value_pos = {};
-    ASSERT_TRUE( vxui__locale_find_text_pos( &list, "1", &form_value_pos ) );
-    EXPECT_LT( form_value_pos.x, 620.0f );
-    EXPECT_GT( form_value_pos.x, 140.0f );
+UTEST_F( locale_fixture, save_slot_rows_use_surface_width_contract )
+{
+    const char* locales[] = { "en", "ja-JP", "ar" };
+    for ( const char* locale : locales ) {
+        vxui__locale_render_settings_desktop( utest_fixture, locale );
+
+        vxui_rect lane = {};
+        vxui_rect row = {};
+        ASSERT_TRUE( vxui__locale_find_element_bounds( "settings.saves.lane", &lane ) );
+        ASSERT_TRUE( vxui__locale_find_element_bounds( "settings.saves.slot.0", &row ) );
+
+        EXPECT_NEAR( row.w, lane.w, 2.0f );
+        EXPECT_GE( lane.w, 500.0f );
+        EXPECT_FALSE( vxui__locale_find_element_bounds( "settings.saves", nullptr ) );
+    }
+}
+
+UTEST_F( locale_fixture, settings_body_scroll_region_clips_overflowing_content )
+{
+    const char* locales[] = { "en", "ja-JP", "ar" };
+    for ( const char* locale : locales ) {
+        vxui_draw_list list = vxui__locale_render_settings_desktop_impl( utest_fixture, locale, 520, 10, 0.0f, nullptr );
+
+        vxui_rect body_scroll = {};
+        vxui_rect body = {};
+        vxui_rect footer = {};
+        vxui_rect surface = {};
+        ASSERT_TRUE( vxui__locale_find_element_bounds( "settings.body_scroll", &body_scroll ) );
+        ASSERT_TRUE( vxui__locale_find_element_bounds( "settings.body", &body ) );
+        ASSERT_TRUE( vxui__locale_find_element_bounds( "settings.footer", &footer ) );
+        ASSERT_TRUE( vxui__locale_find_element_bounds( "settings.surface", &surface ) );
+
+        EXPECT_LT( body_scroll.h, body.h );
+        EXPECT_LT( body_scroll.y, footer.y );
+        EXPECT_LE( footer.y + footer.h, surface.y + surface.h + 1.0f );
+        EXPECT_FALSE( vxui__locale_any_slot_text_below( &list, footer.y ) );
+    }
+}
+
+UTEST_F( locale_fixture, focused_lower_save_slot_stays_inside_body_viewport )
+{
+    const char* locales[] = { "en", "ja-JP", "ar" };
+    for ( const char* locale : locales ) {
+        vxui_draw_list list =
+            vxui__locale_render_settings_desktop_impl( utest_fixture, locale, 520, 10, 620.0f, "settings.saves.slot.12" );
+
+        vxui_rect body_scroll = {};
+        vxui_rect footer = {};
+        vxui_vec2 focused_text = {};
+        ASSERT_TRUE( vxui__locale_find_element_bounds( "settings.body_scroll", &body_scroll ) );
+        ASSERT_TRUE( vxui__locale_find_element_bounds( "settings.footer", &footer ) );
+        ASSERT_TRUE( vxui__locale_find_text_pos( &list, "slot.12", &focused_text ) );
+
+        EXPECT_GE( focused_text.y, body_scroll.y - 1.0f );
+        EXPECT_LT( focused_text.y, footer.y );
+        EXPECT_FALSE( vxui__locale_any_slot_text_below( &list, footer.y ) );
+    }
 }

@@ -11,6 +11,7 @@
 #include <string>
 #include <vector>
 
+#include "demo_layout_contract.h"
 #include <glad/glad.h>
 #include "TinyWindow.h"
 
@@ -86,11 +87,12 @@ enum
 
 static constexpr uint16_t VXUI_DEMO_BUTTON_PADDING_X = 12;
 static constexpr uint16_t VXUI_DEMO_BUTTON_PADDING_Y = 6;
-static constexpr uint16_t VXUI_DEMO_INLINE_GAP = 8;
-static constexpr uint16_t VXUI_DEMO_ROW_GAP = 12;
-static constexpr uint16_t VXUI_DEMO_SCREEN_GAP = 16;
-static constexpr float VXUI_DEMO_CONTENT_MAX_WIDTH = 620.0f;
-static constexpr float VXUI_DEMO_FORM_LABEL_WIDTH = 140.0f;
+static constexpr uint16_t VXUI_DEMO_INLINE_GAP = ( uint16_t ) VXUI_DEMO_LAYOUT_INLINE_GAP;
+static constexpr uint16_t VXUI_DEMO_ROW_GAP = ( uint16_t ) VXUI_DEMO_LAYOUT_ROW_GAP;
+static constexpr uint16_t VXUI_DEMO_SCREEN_GAP = ( uint16_t ) VXUI_DEMO_LAYOUT_SECTION_GAP;
+static constexpr uint16_t VXUI_DEMO_OUTER_PADDING = ( uint16_t ) VXUI_DEMO_LAYOUT_OUTER_PADDING;
+static constexpr uint16_t VXUI_DEMO_SURFACE_PADDING_X = ( uint16_t ) VXUI_DEMO_LAYOUT_SURFACE_PADDING_X;
+static constexpr uint16_t VXUI_DEMO_SURFACE_PADDING_Y = ( uint16_t ) VXUI_DEMO_LAYOUT_SURFACE_PADDING_Y;
 
 struct vxui_demo_font_metrics
 {
@@ -126,6 +128,9 @@ typedef struct vxui_demo_app
     bool show_settings;
     int difficulty;
     float volume;
+    float settings_body_scroll_current;
+    float settings_body_scroll_target;
+    float settings_body_scroll_velocity;
     int locale_index;
     int prompt_table_index;
     vxui_ctx* ctx;
@@ -242,9 +247,19 @@ static bool vxui_demo_locale_matches( const char* locale, const char* prefix );
 static vxui_demo_font_metrics vxui_demo_resolve_font_metrics( const vxui_demo_renderer* renderer, uint32_t requested_font_id, float requested_font_size, const char* locale );
 static void vxui_demo_font_resolver( vxui_ctx* ctx, uint32_t requested_font_id, float requested_font_size, const char* locale, void* userdata, vxui_resolved_font* out );
 static float vxui_demo_control_height( const vxui_demo_renderer* renderer, const char* locale );
+static void vxui_demo_emit_compact_meta_row( vxui_ctx* ctx, const char* id, const char* label_key, const char* value_key, bool rtl );
 static void vxui_demo_emit_label_pair( vxui_ctx* ctx, const char* id, const char* label_key, const char* value_key, bool rtl );
 static void vxui_demo_emit_prompt_pair( vxui_ctx* ctx, const char* id, const char* action_name, const char* label_key );
+static void vxui_demo_emit_status_summary( vxui_ctx* ctx, const char* id, const char* locale_name_key, const char* prompt_name_key, const char* top_name_key, int screen_count, bool rtl );
+static void vxui_demo_emit_controls_block( vxui_ctx* ctx, const char* id, const vxui_label_cfg* section_cfg );
+static void vxui_demo_emit_save_slot_row( vxui_ctx* ctx, const char* id, const char* label_key, float width, float height, bool rtl );
 static void vxui_demo_emit_action_button( vxui_ctx* ctx, const char* id, const char* l10n_key, vxui_action_fn fn, vxui_action_cfg cfg, float control_height );
+static bool vxui_demo_get_anim_bounds( const vxui_ctx* ctx, uint32_t id, vxui_rect* out );
+static void vxui_demo_step_settings_body_scroll( vxui_demo_app* app, float dt );
+static void vxui_demo_sync_settings_body_scroll( vxui_demo_app* app, const vxui_ctx* ctx );
+#ifdef VXUI_DEBUG
+static void vxui_demo_debug_validate_demo_layout( vxui_ctx* ctx, bool show_settings, const vxui_draw_list* list );
+#endif
 static void vxui_demo_open_settings( vxui_ctx* ctx, uint32_t id, void* userdata );
 static void vxui_demo_close_settings( vxui_ctx* ctx, uint32_t id, void* userdata );
 static GLuint vxui_demo_compile_program( const char* vs_source, const char* fs_source, const char* label );
@@ -637,7 +652,77 @@ static float vxui_demo_control_height( const vxui_demo_renderer* renderer, const
     return std::max( 32.0f, metrics.line_height + VXUI_DEMO_BUTTON_PADDING_Y * 2.0f );
 }
 
-static void vxui_demo_emit_label_pair( vxui_ctx* ctx, const char* id, const char* label_key, const char* value_key, bool rtl )
+template <typename TEmitControl>
+static void vxui_demo_emit_form_row(
+    vxui_ctx* ctx,
+    const char* id,
+    const char* label_key,
+    float label_lane_width,
+    float control_lane_width,
+    bool rtl,
+    TEmitControl&& emit_control )
+{
+    uint32_t row_id = vxui_id( id );
+    std::string label_lane_id = std::string( id ) + ".label_lane";
+    std::string control_lane_id = std::string( id ) + ".control";
+    CLAY( vxui__clay_id_from_hash( row_id ), {
+        .layout = {
+            .sizing = { CLAY_SIZING_GROW( 0 ), CLAY_SIZING_FIT( 0 ) },
+            .childGap = VXUI_DEMO_ROW_GAP,
+            .childAlignment = { .y = CLAY_ALIGN_Y_CENTER },
+            .layoutDirection = CLAY_LEFT_TO_RIGHT,
+        },
+    } ) {
+        auto emit_label_lane = [&]() {
+            CLAY( vxui__clay_id_from_hash( vxui_id( label_lane_id.c_str() ) ), {
+                .layout = {
+                    .sizing = { CLAY_SIZING_FIXED( label_lane_width ), CLAY_SIZING_FIT( 0 ) },
+                    .childAlignment = { .x = rtl ? CLAY_ALIGN_X_RIGHT : CLAY_ALIGN_X_LEFT },
+                },
+            } ) {
+                VXUI_LABEL( ctx, label_key, ( vxui_label_cfg ) { 0 } );
+            }
+        };
+
+        auto emit_control_lane = [&]() {
+            CLAY( vxui__clay_id_from_hash( vxui_id( control_lane_id.c_str() ) ), {
+                .layout = {
+                    .sizing = { CLAY_SIZING_FIXED( control_lane_width ), CLAY_SIZING_FIT( 0 ) },
+                    .childAlignment = { .x = rtl ? CLAY_ALIGN_X_RIGHT : CLAY_ALIGN_X_LEFT },
+                    .layoutDirection = CLAY_TOP_TO_BOTTOM,
+                },
+            } ) {
+                emit_control();
+            }
+        };
+
+        if ( rtl ) {
+            emit_control_lane();
+            emit_label_lane();
+        } else {
+            emit_label_lane();
+            emit_control_lane();
+        }
+    }
+}
+
+template <typename TEmitChildren>
+static void vxui_demo_emit_footer_action_bar( vxui_ctx* ctx, const char* id, bool rtl, TEmitChildren&& emit_children )
+{
+    uint32_t bar_id = vxui_id( id );
+    CLAY( vxui__clay_id_from_hash( bar_id ), {
+        .layout = {
+            .sizing = { CLAY_SIZING_GROW( 0 ), CLAY_SIZING_FIT( 0 ) },
+            .childGap = VXUI_DEMO_ROW_GAP,
+            .childAlignment = { .y = CLAY_ALIGN_Y_CENTER },
+            .layoutDirection = vxui__resolve_dir( CLAY_LEFT_TO_RIGHT, rtl ),
+        },
+    } ) {
+        emit_children();
+    }
+}
+
+static void vxui_demo_emit_compact_meta_row( vxui_ctx* ctx, const char* id, const char* label_key, const char* value_key, bool rtl )
 {
     uint32_t pair_id = vxui_id( id );
     CLAY( vxui__clay_id_from_hash( pair_id ), {
@@ -658,6 +743,11 @@ static void vxui_demo_emit_label_pair( vxui_ctx* ctx, const char* id, const char
     }
 }
 
+static void vxui_demo_emit_label_pair( vxui_ctx* ctx, const char* id, const char* label_key, const char* value_key, bool rtl )
+{
+    vxui_demo_emit_compact_meta_row( ctx, id, label_key, value_key, rtl );
+}
+
 static void vxui_demo_emit_prompt_pair( vxui_ctx* ctx, const char* id, const char* action_name, const char* label_key )
 {
     uint32_t pair_id = vxui_id( id );
@@ -670,6 +760,110 @@ static void vxui_demo_emit_prompt_pair( vxui_ctx* ctx, const char* id, const cha
         },
     } ) {
         VXUI_PROMPT( ctx, action_name );
+        VXUI_LABEL( ctx, label_key, ( vxui_label_cfg ) { 0 } );
+    }
+}
+
+static void vxui_demo_emit_status_summary(
+    vxui_ctx* ctx,
+    const char* id,
+    const char* locale_name_key,
+    const char* prompt_name_key,
+    const char* top_name_key,
+    int screen_count,
+    bool rtl )
+{
+    const uint32_t summary_id = vxui_id( id );
+    const std::string primary_id = std::string( id ) + ".row.primary";
+    const std::string secondary_id = std::string( id ) + ".row.secondary";
+    const std::string locale_id = std::string( id ) + ".locale";
+    const std::string prompts_id = std::string( id ) + ".prompts";
+    const std::string screens_id = std::string( id ) + ".screens";
+    const std::string top_id = std::string( id ) + ".top";
+    CLAY( vxui__clay_id_from_hash( summary_id ), {
+        .layout = {
+            .sizing = { CLAY_SIZING_GROW( 0 ), CLAY_SIZING_FIT( 0 ) },
+            .childGap = VXUI_DEMO_ROW_GAP,
+            .layoutDirection = CLAY_TOP_TO_BOTTOM,
+        },
+    } ) {
+        CLAY( vxui__clay_id_from_hash( vxui_id( primary_id.c_str() ) ), {
+            .layout = {
+                .sizing = { CLAY_SIZING_GROW( 0 ), CLAY_SIZING_FIT( 0 ) },
+                .childGap = VXUI_DEMO_ROW_GAP,
+                .layoutDirection = vxui__resolve_dir( CLAY_LEFT_TO_RIGHT, rtl ),
+            },
+        } ) {
+            vxui_demo_emit_compact_meta_row( ctx, locale_id.c_str(), "status.label.locale", locale_name_key, rtl );
+            vxui_demo_emit_compact_meta_row( ctx, prompts_id.c_str(), "status.label.prompts", prompt_name_key, rtl );
+        }
+
+        CLAY( vxui__clay_id_from_hash( vxui_id( secondary_id.c_str() ) ), {
+            .layout = {
+                .sizing = { CLAY_SIZING_GROW( 0 ), CLAY_SIZING_FIT( 0 ) },
+                .childGap = VXUI_DEMO_ROW_GAP,
+                .layoutDirection = vxui__resolve_dir( CLAY_LEFT_TO_RIGHT, rtl ),
+            },
+        } ) {
+            CLAY( vxui__clay_id_from_hash( vxui_id( screens_id.c_str() ) ), {
+                .layout = {
+                    .sizing = { CLAY_SIZING_FIT( 0 ), CLAY_SIZING_FIT( 0 ) },
+                },
+            } ) {
+                VXUI_VALUE( ctx, "status.label.screens", ( float ) screen_count, ( vxui_value_cfg ) {
+                    .font_id = VXUI_DEMO_FONT_ROLE_BODY,
+                    .font_size = ( float ) VXUI_DEMO_BODY_SIZE,
+                    .format = "%.0f",
+                } );
+            }
+            vxui_demo_emit_compact_meta_row( ctx, top_id.c_str(), "status.label.top", top_name_key, rtl );
+        }
+    }
+}
+
+static void vxui_demo_emit_controls_block( vxui_ctx* ctx, const char* id, const vxui_label_cfg* section_cfg )
+{
+    static const char* kHintKeys[] = {
+        "hint.controls.0",
+        "hint.controls.1",
+        "hint.controls.2",
+        "hint.controls.3",
+    };
+
+    CLAY( vxui__clay_id_from_hash( vxui_id( id ) ), {
+        .layout = {
+            .sizing = { CLAY_SIZING_GROW( 0 ), CLAY_SIZING_FIT( 0 ) },
+            .padding = CLAY_PADDING_ALL( 18 ),
+            .childGap = VXUI_DEMO_ROW_GAP,
+            .layoutDirection = CLAY_TOP_TO_BOTTOM,
+        },
+        .backgroundColor = { 22, 34, 58, 220 },
+        .cornerRadius = CLAY_CORNER_RADIUS( 14 ),
+    } ) {
+        VXUI_LABEL( ctx, "menu.controls", section_cfg ? *section_cfg : ( vxui_label_cfg ) { 0 } );
+        for ( const char* hint_key : kHintKeys ) {
+            VXUI_LABEL( ctx, hint_key, ( vxui_label_cfg ) { 0 } );
+        }
+    }
+}
+
+static void vxui_demo_emit_save_slot_row( vxui_ctx* ctx, const char* id, const char* label_key, float width, float height, bool rtl )
+{
+    const uint32_t action_id = vxui_id( id );
+    vxui__register_action( ctx, action_id, nullptr, ( vxui_action_cfg ) { 0 } );
+    vxui__get_anim_state( ctx, action_id, true );
+    ctx->current_decl_id = action_id;
+
+    const bool focused = ctx->focused_id == action_id;
+    CLAY( vxui__clay_id_from_hash( action_id ), {
+        .layout = {
+            .sizing = { CLAY_SIZING_FIXED( width ), CLAY_SIZING_FIXED( height ) },
+            .padding = { 14, 14, 8, 8 },
+            .childAlignment = { .x = rtl ? CLAY_ALIGN_X_RIGHT : CLAY_ALIGN_X_LEFT, .y = CLAY_ALIGN_Y_CENTER },
+        },
+        .backgroundColor = focused ? Clay_Color { 32, 64, 96, 255 } : Clay_Color { 18, 28, 46, 196 },
+        .cornerRadius = CLAY_CORNER_RADIUS( 8 ),
+    } ) {
         VXUI_LABEL( ctx, label_key, ( vxui_label_cfg ) { 0 } );
     }
 }
@@ -701,6 +895,342 @@ static void vxui_demo_emit_action_button( vxui_ctx* ctx, const char* id, const c
             action_id );
     }
 }
+
+#ifdef VXUI_DEBUG
+static Clay_String vxui_demo_clay_string( const char* text )
+{
+    return ( Clay_String ) {
+        .isStaticallyAllocated = false,
+        .length = text ? ( int32_t ) std::strlen( text ) : 0,
+        .chars = text ? text : "",
+    };
+}
+
+static bool vxui_demo_get_element_bounds( const char* id, vxui_rect* out )
+{
+    Clay_ElementData element = Clay_GetElementData( Clay_GetElementId( vxui_demo_clay_string( id ) ) );
+    if ( !element.found ) {
+        return false;
+    }
+    if ( out ) {
+        *out = {
+            element.boundingBox.x,
+            element.boundingBox.y,
+            element.boundingBox.width,
+            element.boundingBox.height,
+        };
+    }
+    return true;
+}
+
+static bool vxui_demo_get_anim_bounds( const vxui_ctx* ctx, uint32_t id, vxui_rect* out )
+{
+    if ( !ctx || !ctx->anim_slots || ctx->anim_capacity <= 0 ) {
+        return false;
+    }
+
+    for ( int i = 0; i < ctx->anim_capacity; ++i ) {
+        const vxui_anim_slot* slot = &ctx->anim_slots[ i ];
+        if ( !slot->occupied || slot->state.id != id ) {
+            continue;
+        }
+        if ( out ) {
+            *out = slot->state.bounds;
+        }
+        return true;
+    }
+    return false;
+}
+
+static float vxui_demo_clamp_scroll_value( float value, float max_scroll )
+{
+    return std::clamp( value, 0.0f, std::max( 0.0f, max_scroll ) );
+}
+
+static void vxui_demo_step_settings_body_scroll( vxui_demo_app* app, float dt )
+{
+    if ( !app ) {
+        return;
+    }
+
+    vxui__spring_step(
+        app->settings_body_scroll_target,
+        &app->settings_body_scroll_current,
+        &app->settings_body_scroll_velocity,
+        VXUI_DEFAULT_STIFFNESS,
+        VXUI_DEFAULT_DAMPING,
+        dt );
+}
+
+static void vxui_demo_sync_settings_body_scroll( vxui_demo_app* app, const vxui_ctx* ctx )
+{
+    if ( !app || !ctx || !app->show_settings ) {
+        if ( app ) {
+            app->settings_body_scroll_current = 0.0f;
+            app->settings_body_scroll_target = 0.0f;
+            app->settings_body_scroll_velocity = 0.0f;
+        }
+        return;
+    }
+
+    vxui_rect body_scroll = {};
+    vxui_rect body = {};
+    if ( !vxui_demo_get_element_bounds( "settings.body_scroll", &body_scroll )
+        || !vxui_demo_get_element_bounds( "settings.body", &body ) ) {
+        app->settings_body_scroll_current = 0.0f;
+        app->settings_body_scroll_target = 0.0f;
+        app->settings_body_scroll_velocity = 0.0f;
+        return;
+    }
+
+    const float max_scroll = std::max( 0.0f, body.h - body_scroll.h );
+    if ( max_scroll <= 1.0f ) {
+        app->settings_body_scroll_current = 0.0f;
+        app->settings_body_scroll_target = 0.0f;
+        app->settings_body_scroll_velocity = 0.0f;
+        return;
+    }
+
+    app->settings_body_scroll_current = vxui_demo_clamp_scroll_value( app->settings_body_scroll_current, max_scroll );
+    app->settings_body_scroll_target = vxui_demo_clamp_scroll_value( app->settings_body_scroll_target, max_scroll );
+
+    if ( ctx->focused_id == 0 ) {
+        return;
+    }
+
+    vxui_rect focused = {};
+    if ( !vxui_demo_get_anim_bounds( ctx, ctx->focused_id, &focused ) ) {
+        return;
+    }
+
+    const float reveal_padding = 12.0f;
+    const float body_top = body_scroll.y + reveal_padding;
+    const float body_bottom = body_scroll.y + body_scroll.h - reveal_padding;
+    const float focused_bottom = focused.y + focused.h;
+
+    if ( focused.y < body_top ) {
+        app->settings_body_scroll_target += focused.y - body_top;
+    } else if ( focused_bottom > body_bottom ) {
+        app->settings_body_scroll_target += focused_bottom - body_bottom;
+    }
+
+    app->settings_body_scroll_target = vxui_demo_clamp_scroll_value( app->settings_body_scroll_target, max_scroll );
+}
+
+static uint64_t vxui_demo_digest_warnings( const std::vector<std::string>& warnings )
+{
+    uint64_t hash = 1469598103934665603ull;
+    for ( const std::string& warning : warnings ) {
+        for ( unsigned char ch : warning ) {
+            hash ^= ( uint64_t ) ch;
+            hash *= 1099511628211ull;
+        }
+        hash ^= 0xFFu;
+        hash *= 1099511628211ull;
+    }
+    return hash;
+}
+
+static bool vxui_demo_seq_targets_id( const vxui_registered_seq* seq, uint32_t id )
+{
+    if ( !seq || !seq->steps || seq->count <= 0 ) {
+        return false;
+    }
+
+    for ( int i = 0; i < seq->count; ++i ) {
+        if ( seq->steps[ i ].id == id ) {
+            return true;
+        }
+    }
+    return false;
+}
+
+static bool vxui_demo_has_title_border_regression( const vxui_draw_list* list, vxui_rect title_bounds )
+{
+    if ( !list ) {
+        return false;
+    }
+
+    for ( int i = 0; i < list->length; ++i ) {
+        const vxui_cmd* cmd = &list->commands[ i ];
+        if ( cmd->type != VXUI_CMD_BORDER ) {
+            continue;
+        }
+
+        const vxui_draw_cmd_border& border = cmd->border;
+        const bool goldish = border.color.r >= 220 && border.color.g >= 170 && border.color.b <= 120;
+        const bool hugs_title = std::fabs( border.bounds.x - title_bounds.x ) <= 10.0f
+            && std::fabs( border.bounds.y - title_bounds.y ) <= 10.0f
+            && std::fabs( border.bounds.w - title_bounds.w ) <= 24.0f
+            && std::fabs( border.bounds.h - title_bounds.h ) <= 24.0f;
+        if ( goldish && hugs_title ) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+static void vxui_demo_debug_validate_demo_layout( vxui_ctx* ctx, bool show_settings, const vxui_draw_list* list )
+{
+    if ( !ctx ) {
+        return;
+    }
+
+    const float viewport_width = std::max( 0.0f, ( float ) ctx->cfg.screen_width - VXUI_DEMO_LAYOUT_OUTER_PADDING * 2.0f );
+    const vxui_demo_surface_kind kind = show_settings ? VXUI_DEMO_SURFACE_SETTINGS : VXUI_DEMO_SURFACE_MAIN_MENU;
+    const vxui_demo_surface_contract contract = vxui_demo_get_surface_contract( kind );
+    const vxui_demo_surface_metrics metrics = vxui_demo_compute_surface_metrics( viewport_width, ctx->locale, kind );
+    const char* root_id = vxui_demo_root_id( kind );
+    const char* surface_id = vxui_demo_surface_id( kind );
+    const char* primary_id = show_settings ? "settings.header" : "main.hero";
+    const char* secondary_id = show_settings ? "settings.body_scroll" : "main.meta";
+    const char* tertiary_id = show_settings ? "settings.footer" : "main.help";
+    const char* footer_id = show_settings ? "settings.footer" : nullptr;
+
+    std::vector<std::string> warnings;
+    vxui_rect root = {};
+    vxui_rect surface = {};
+    if ( vxui_demo_get_element_bounds( root_id, &root ) ) {
+        if ( std::fabs( root.w - ( float ) ctx->cfg.screen_width ) > 1.0f
+            || std::fabs( root.h - ( float ) ctx->cfg.screen_height ) > 1.0f ) {
+            warnings.emplace_back( "screen root stopped filling the viewport; the static backdrop contract regressed." );
+        }
+    }
+    if ( vxui_demo_get_element_bounds( surface_id, &surface ) ) {
+        if ( ctx->cfg.screen_width >= 1100 && surface.w < contract.desktop_min_surface_width ) {
+            warnings.emplace_back(
+                "surface width fell below the desktop minimum; the demo is collapsing back toward a narrow mobile column." );
+        }
+    }
+
+    const char* enter_seq_name = show_settings ? "settings_enter" : "main_menu_enter";
+    const char* exit_seq_name = show_settings ? "settings_exit" : nullptr;
+    const uint32_t root_anim_id = vxui_id( root_id );
+    const uint32_t surface_anim_id = vxui_id( surface_id );
+    const vxui_registered_seq* enter_seq = vxui_find_seq( ctx, enter_seq_name );
+    if ( enter_seq ) {
+        if ( vxui_demo_seq_targets_id( enter_seq, root_anim_id ) ) {
+            warnings.emplace_back( "screen enter animation is still bound to the full-screen root instead of the bounded surface." );
+        }
+        if ( !vxui_demo_seq_targets_id( enter_seq, surface_anim_id ) ) {
+            warnings.emplace_back( "screen enter animation stopped targeting the bounded surface." );
+        }
+    }
+    if ( exit_seq_name ) {
+        const vxui_registered_seq* exit_seq = vxui_find_seq( ctx, exit_seq_name );
+        if ( exit_seq ) {
+            if ( vxui_demo_seq_targets_id( exit_seq, root_anim_id ) ) {
+                warnings.emplace_back( "screen exit animation is still bound to the full-screen root instead of the bounded surface." );
+            }
+            if ( !vxui_demo_seq_targets_id( exit_seq, surface_anim_id ) ) {
+                warnings.emplace_back( "screen exit animation stopped targeting the bounded surface." );
+            }
+        }
+    }
+
+    if ( show_settings ) {
+        vxui_rect header = {};
+        vxui_rect body_scroll = {};
+        vxui_rect body = {};
+        vxui_rect control_lane = {};
+        if ( vxui_demo_get_element_bounds( "settings.form.volume.row.control", &control_lane ) && surface.w > 0.0f ) {
+            if ( control_lane.w < surface.w * 0.45f || control_lane.w < metrics.control_lane_width - 24.0f ) {
+                warnings.emplace_back( "settings control lane is too narrow relative to the desktop surface." );
+            }
+        }
+
+        vxui_rect save_lane = {};
+        vxui_rect save_row = {};
+        if ( vxui_demo_get_element_bounds( "settings.saves.lane", &save_lane )
+            && vxui_demo_get_element_bounds( "settings.saves.slot.0", &save_row ) ) {
+            if ( std::fabs( save_row.w - save_lane.w ) > 24.0f ) {
+                warnings.emplace_back( "save slot rows drifted away from the intended control lane width." );
+            }
+        }
+
+        if ( vxui_demo_get_element_bounds( "settings.saves", nullptr ) ) {
+            warnings.emplace_back( "settings reintroduced a nested save-slot scroll viewport instead of using the body scroll owner." );
+        }
+
+        if ( vxui_demo_get_element_bounds( "settings.header", &header )
+            && vxui_demo_get_element_bounds( "settings.body_scroll", &body_scroll )
+            && vxui_demo_get_element_bounds( "settings.body", &body ) ) {
+            if ( header.y + header.h > body_scroll.y ) {
+                warnings.emplace_back( "settings header overlaps the scrollable body region." );
+            }
+            if ( body.h > body_scroll.h + 1.0f && body_scroll.h <= 0.0f ) {
+                warnings.emplace_back( "settings body is overflowing without a usable scroll viewport." );
+            }
+        }
+
+        vxui_rect footer = {};
+        if ( vxui_demo_get_element_bounds( "settings.footer", &footer ) ) {
+            if ( footer.y + footer.h > ( float ) ctx->cfg.screen_height - VXUI_DEMO_LAYOUT_OUTER_PADDING + 1.0f ) {
+                warnings.emplace_back( "settings footer slipped below the viewport instead of staying pinned inside the surface." );
+            }
+        }
+
+        vxui_rect title = {};
+        if ( vxui_demo_get_element_bounds( "settings.title", &title ) && vxui_demo_has_title_border_regression( list, title ) ) {
+            warnings.emplace_back( "decorative title border regressed; the old gold guide frame is back." );
+        }
+    } else {
+        vxui_rect meta = {};
+        if ( vxui_demo_get_element_bounds( "main.meta", &meta ) && surface.w > 0.0f ) {
+            if ( meta.w < surface.w * 0.68f ) {
+                warnings.emplace_back( "main menu meta block collapsed into a narrow strip." );
+            }
+        }
+    }
+
+    vxui_rect primary = {};
+    vxui_rect secondary = {};
+    vxui_rect tertiary = {};
+    if ( vxui_demo_get_element_bounds( primary_id, &primary )
+        && vxui_demo_get_element_bounds( secondary_id, &secondary )
+        && vxui_demo_get_element_bounds( tertiary_id, &tertiary ) ) {
+        const float gap_a = secondary.y - ( primary.y + primary.h );
+        const float gap_b = tertiary.y - ( secondary.y + secondary.h );
+        if ( gap_a < 8.0f || gap_b < 8.0f ) {
+            warnings.emplace_back( "demo sections are collapsing together and losing clear vertical rhythm." );
+        }
+    }
+
+    if ( footer_id ) {
+        vxui_rect footer = {};
+        const char* footer_anchor_id = show_settings ? "settings.body_scroll" : tertiary_id;
+        if ( vxui_demo_get_element_bounds( footer_anchor_id, &tertiary )
+            && vxui_demo_get_element_bounds( footer_id, &footer ) ) {
+            const float gap = footer.y - ( tertiary.y + tertiary.h );
+            if ( gap < 8.0f ) {
+                warnings.emplace_back( "settings footer is crowding the save slots block." );
+            }
+        }
+    }
+
+    static uint64_t last_digest = 0;
+    static bool had_warnings = false;
+
+    if ( warnings.empty() ) {
+        last_digest = 0;
+        had_warnings = false;
+        return;
+    }
+
+    const uint64_t digest = vxui_demo_digest_warnings( warnings );
+    if ( had_warnings && digest == last_digest ) {
+        return;
+    }
+
+    had_warnings = true;
+    last_digest = digest;
+    std::fprintf( stderr, "vxui demo layout warnings:\n" );
+    for ( const std::string& warning : warnings ) {
+        std::fprintf( stderr, "  - %s\n", warning.c_str() );
+    }
+}
+#endif
 
 static FILE* vxui_demo_fopen( const char* path, const char* mode )
 {
@@ -892,6 +1422,9 @@ static void vxui_demo_open_settings( vxui_ctx* ctx, uint32_t id, void* userdata 
         return;
     }
     app->show_settings = true;
+    app->settings_body_scroll_current = 0.0f;
+    app->settings_body_scroll_target = 0.0f;
+    app->settings_body_scroll_velocity = 0.0f;
     vxui_push_screen( ctx, "settings" );
 }
 
@@ -903,6 +1436,9 @@ static void vxui_demo_close_settings( vxui_ctx* ctx, uint32_t id, void* userdata
         return;
     }
     app->show_settings = false;
+    app->settings_body_scroll_current = 0.0f;
+    app->settings_body_scroll_target = 0.0f;
+    app->settings_body_scroll_velocity = 0.0f;
     vxui_pop_screen( ctx );
 }
 
@@ -2501,8 +3037,10 @@ int main( int argc, char** argv )
              app.watched_seq_path.c_str(),
              "[sequence.main_menu_enter]\n"
              "steps = [\n"
-             "  { delay = 0, id = \"main_menu\", prop = \"opacity\", target = 0.35 },\n"
-             "  { delay = 100, id = \"main_menu\", prop = \"opacity\", target = 1.0 },\n"
+             "  { delay = 0, id = \"main.surface\", prop = \"opacity\", target = 0.35 },\n"
+             "  { delay = 0, id = \"main.surface\", prop = \"slide_x\", target = 20.0 },\n"
+             "  { delay = 100, id = \"main.surface\", prop = \"opacity\", target = 1.0 },\n"
+             "  { delay = 120, id = \"main.surface\", prop = \"slide_x\", target = 0.0 },\n"
              "]\n" ) ) {
         std::fprintf( stderr, "Failed to create the watched sequence file at %s.\n", app.watched_seq_path.c_str() );
         vxui_demo_shutdown_renderer( &renderer );
@@ -2535,12 +3073,14 @@ int main( int argc, char** argv )
 #endif
 
     vxui_seq_step settings_enter[] = {
-        { 0, vxui_id( "settings" ), VXUI_PROP_SLIDE_X, 28.0f },
-        { 120, vxui_id( "settings" ), VXUI_PROP_SLIDE_X, 0.0f },
+        { 0, vxui_id( "settings.surface" ), VXUI_PROP_SLIDE_X, 28.0f },
+        { 0, vxui_id( "settings.surface" ), VXUI_PROP_OPACITY, 0.35f },
+        { 120, vxui_id( "settings.surface" ), VXUI_PROP_SLIDE_X, 0.0f },
+        { 120, vxui_id( "settings.surface" ), VXUI_PROP_OPACITY, 1.0f },
     };
     vxui_seq_step settings_exit[] = {
-        { 0, vxui_id( "settings" ), VXUI_PROP_OPACITY, 0.4f },
-        { 0, vxui_id( "settings" ), VXUI_PROP_SLIDE_X, -20.0f },
+        { 0, vxui_id( "settings.surface" ), VXUI_PROP_OPACITY, 0.4f },
+        { 0, vxui_id( "settings.surface" ), VXUI_PROP_SLIDE_X, -20.0f },
     };
     vxui_register_seq( &ctx, "settings_enter", settings_enter, ( int ) ( sizeof( settings_enter ) / sizeof( settings_enter[ 0 ] ) ) );
     vxui_register_seq( &ctx, "settings_exit", settings_exit, ( int ) ( sizeof( settings_exit ) / sizeof( settings_exit[ 0 ] ) ) );
@@ -2564,6 +3104,7 @@ int main( int argc, char** argv )
             dt = 1.0f / 60.0f;
         }
         uint64_t now_ms = ( uint64_t ) std::chrono::duration_cast< std::chrono::milliseconds >( now.time_since_epoch() ).count();
+        vxui_demo_step_settings_body_scroll( &app, dt );
 
 #ifdef VXUI_DEBUG
         if ( ctx.debug_seq_editor.selected_seq != app.last_selected_seq ) {
@@ -2669,6 +3210,8 @@ int main( int argc, char** argv )
         const char* locale_name_key = vxui_demo_locale_name_key( app.locale_index );
         const char* prompt_name_key = vxui_demo_prompt_name_key( app.prompt_table_index );
         const char* top_name_key = vxui_demo_screen_name_key( top_screen ? top_screen->name : nullptr );
+        const int screen_count = ctx.screen_count;
+        const float viewport_width = std::max( 0.0f, ( float ) ctx.cfg.screen_width - VXUI_DEMO_LAYOUT_OUTER_PADDING * 2.0f );
         const vxui_label_cfg title_cfg = {
             .font_id = VXUI_DEMO_FONT_ROLE_TITLE,
             .font_size = ( float ) VXUI_DEMO_TITLE_SIZE,
@@ -2681,215 +3224,293 @@ int main( int argc, char** argv )
         };
 
         if ( app.show_settings ) {
+            const vxui_demo_surface_metrics surface_metrics =
+                vxui_demo_compute_surface_metrics( viewport_width, ctx.locale, VXUI_DEMO_SURFACE_SETTINGS );
+            const float surface_max_height = std::max( 0.0f, ( float ) ctx.cfg.screen_height - VXUI_DEMO_LAYOUT_OUTER_PADDING * 2.0f );
             VXUI( &ctx, "settings", {
                 .layout = {
                     .sizing = { CLAY_SIZING_GROW( 0 ), CLAY_SIZING_GROW( 0 ) },
-                    .padding = CLAY_PADDING_ALL( 18 ),
+                    .padding = CLAY_PADDING_ALL( VXUI_DEMO_OUTER_PADDING ),
+                    .childAlignment = { .x = CLAY_ALIGN_X_CENTER },
+                    .layoutDirection = CLAY_TOP_TO_BOTTOM,
                 },
                 .backgroundColor = { 11, 18, 34, 255 },
             } ) {
-                VXUI( &ctx, "settings.content", {
+                VXUI( &ctx, "settings.surface", {
                     .layout = {
-                        .sizing = { CLAY_SIZING_GROW( 0, VXUI_DEMO_CONTENT_MAX_WIDTH ), CLAY_SIZING_FIT( 0 ) },
-                        .childGap = VXUI_DEMO_SCREEN_GAP,
+                        .sizing = { CLAY_SIZING_FIXED( surface_metrics.surface_width ), CLAY_SIZING_GROW( 0, surface_max_height ) },
+                        .padding = { VXUI_DEMO_SURFACE_PADDING_X, VXUI_DEMO_SURFACE_PADDING_X, VXUI_DEMO_SURFACE_PADDING_Y, VXUI_DEMO_SURFACE_PADDING_Y },
+                        .childGap = ( uint16_t ) VXUI_DEMO_LAYOUT_SECTION_GAP,
                         .childAlignment = { .x = rtl ? CLAY_ALIGN_X_RIGHT : CLAY_ALIGN_X_LEFT },
                         .layoutDirection = CLAY_TOP_TO_BOTTOM,
                     },
+                    .backgroundColor = { 17, 26, 48, 244 },
+                    .cornerRadius = CLAY_CORNER_RADIUS( 18 ),
                 } ) {
-                VXUI( &ctx, "settings.title", {
-                    .layout = {
-                        .sizing = { CLAY_SIZING_FIT( 0 ), CLAY_SIZING_FIT( 0 ) },
-                        .childGap = 0,
-                        .layoutDirection = CLAY_TOP_TO_BOTTOM,
-                    },
-                } ) {
-                    VXUI_LABEL( &ctx, "menu.settings", title_cfg );
-                    VXUI_TRAIT( VXUI_TRAIT_SPIN, ( vxui_demo_spin ) { .speed = 2.0f, .padding = 6.0f } );
-                }
-
-                VXUI( &ctx, "settings.form", {
-                    .layout = {
-                        .sizing = { CLAY_SIZING_GROW( 0 ), CLAY_SIZING_FIT( 0 ) },
-                        .childGap = VXUI_DEMO_ROW_GAP,
-                        .layoutDirection = CLAY_TOP_TO_BOTTOM,
-                    },
-                } ) {
-                    VXUI( &ctx, "settings.form.difficulty", {
+                    VXUI( &ctx, "settings.header", {
                         .layout = {
                             .sizing = { CLAY_SIZING_GROW( 0 ), CLAY_SIZING_FIT( 0 ) },
-                            .childGap = VXUI_DEMO_ROW_GAP,
-                            .childAlignment = { .y = CLAY_ALIGN_Y_CENTER },
-                            .layoutDirection = CLAY_LEFT_TO_RIGHT,
+                            .padding = { 6, 0, 0, 0 },
+                            .childGap = 6,
+                            .layoutDirection = CLAY_TOP_TO_BOTTOM,
                         },
                     } ) {
-                        CLAY( vxui__clay_id_from_hash( vxui_id( "settings.form.difficulty.label" ) ), {
+                        VXUI( &ctx, "settings.title", {
                             .layout = {
-                                .sizing = { CLAY_SIZING_FIXED( VXUI_DEMO_FORM_LABEL_WIDTH ), CLAY_SIZING_FIT( 0 ) },
+                                .sizing = { CLAY_SIZING_GROW( 0 ), CLAY_SIZING_FIT( 0 ) },
+                                .childGap = 6,
+                                .layoutDirection = CLAY_TOP_TO_BOTTOM,
                             },
                         } ) {
-                            VXUI_LABEL( &ctx, "menu.difficulty", ( vxui_label_cfg ) { 0 } );
+                            VXUI_LABEL( &ctx, "menu.settings", title_cfg );
                         }
-                        VXUI_OPTION( &ctx, "settings.difficulty", &app.difficulty, difficulty_keys, 3, ( vxui_option_cfg ) { 0 } );
                     }
 
-                    VXUI( &ctx, "settings.form.volume", {
+                    VXUI( &ctx, "settings.body_viewport", {
                         .layout = {
-                            .sizing = { CLAY_SIZING_GROW( 0 ), CLAY_SIZING_FIT( 0 ) },
-                            .childGap = VXUI_DEMO_ROW_GAP,
-                            .childAlignment = { .y = CLAY_ALIGN_Y_CENTER },
-                            .layoutDirection = CLAY_LEFT_TO_RIGHT,
+                            .sizing = { CLAY_SIZING_GROW( 0 ), CLAY_SIZING_GROW( 160.0f ) },
+                            .layoutDirection = CLAY_TOP_TO_BOTTOM,
                         },
                     } ) {
-                        CLAY( vxui__clay_id_from_hash( vxui_id( "settings.form.volume.label" ) ), {
+                        CLAY( vxui__clay_id_from_hash( vxui_id( "settings.body_scroll" ) ), {
                             .layout = {
-                                .sizing = { CLAY_SIZING_FIXED( VXUI_DEMO_FORM_LABEL_WIDTH ), CLAY_SIZING_FIT( 0 ) },
+                                .sizing = { CLAY_SIZING_GROW( 0 ), CLAY_SIZING_GROW( 0 ) },
+                                .layoutDirection = CLAY_TOP_TO_BOTTOM,
+                            },
+                            .clip = {
+                                .horizontal = true,
+                                .vertical = true,
+                                .childOffset = { 0.0f, -app.settings_body_scroll_current },
                             },
                         } ) {
-                            VXUI_LABEL( &ctx, "menu.volume", ( vxui_label_cfg ) { 0 } );
-                        }
-                        VXUI_SLIDER( &ctx, "settings.volume", &app.volume, 0.0f, 1.0f, ( vxui_slider_cfg ) {
-                            .show_value = true,
-                        } );
-                    }
-                }
+                            VXUI( &ctx, "settings.body", {
+                                .layout = {
+                                    .sizing = { CLAY_SIZING_GROW( 0 ), CLAY_SIZING_FIT( 0 ) },
+                                    .childGap = ( uint16_t ) VXUI_DEMO_LAYOUT_SECTION_GAP,
+                                    .layoutDirection = CLAY_TOP_TO_BOTTOM,
+                                },
+                            } ) {
+                                VXUI( &ctx, "settings.controls_section", {
+                                    .layout = {
+                                        .sizing = { CLAY_SIZING_GROW( 0 ), CLAY_SIZING_FIT( 0 ) },
+                                        .padding = CLAY_PADDING_ALL( 18 ),
+                                        .childGap = VXUI_DEMO_ROW_GAP,
+                                        .layoutDirection = CLAY_TOP_TO_BOTTOM,
+                                    },
+                                    .backgroundColor = { 20, 32, 56, 192 },
+                                    .cornerRadius = CLAY_CORNER_RADIUS( 12 ),
+                                } ) {
+                                    VXUI_LABEL( &ctx, "menu.controls", section_cfg );
 
-                VXUI( &ctx, "settings.saves_section", {
-                    .layout = {
-                        .sizing = { CLAY_SIZING_GROW( 0 ), CLAY_SIZING_FIT( 0 ) },
-                        .childGap = VXUI_DEMO_ROW_GAP,
-                        .layoutDirection = CLAY_TOP_TO_BOTTOM,
-                    },
-                } ) {
-                    VXUI_LABEL( &ctx, "menu.saves", section_cfg );
-                    VXUI_LIST_BEGIN( &ctx, "settings.saves", ( vxui_list_cfg ) {
-                        .max_visible = 6,
-                        .item_height = control_height,
-                    } ) {
-                        for ( int i = 0; i < 8; ++i ) {
-                            VXUI_LIST_ITEM( &ctx, i ) {
-                                VXUI_LABEL( &ctx, slot_keys[ i ], ( vxui_label_cfg ) { 0 } );
+                                    vxui_demo_emit_form_row(
+                                        &ctx,
+                                        "settings.form.difficulty.row",
+                                        "menu.difficulty",
+                                        surface_metrics.label_lane_width,
+                                        surface_metrics.control_lane_width,
+                                        rtl,
+                                        [&]() {
+                                            CLAY( vxui__clay_id_from_hash( vxui_id( "settings.form.difficulty.control.inner" ) ), {
+                                                .layout = {
+                                                    .sizing = { CLAY_SIZING_GROW( 0 ), CLAY_SIZING_FIT( 0 ) },
+                                                    .childAlignment = { .x = rtl ? CLAY_ALIGN_X_RIGHT : CLAY_ALIGN_X_LEFT },
+                                                },
+                                            } ) {
+                                                VXUI_OPTION( &ctx, "settings.difficulty", &app.difficulty, difficulty_keys, 3, ( vxui_option_cfg ) { 0 } );
+                                            }
+                                        } );
+
+                                    vxui_demo_emit_form_row(
+                                        &ctx,
+                                        "settings.form.volume.row",
+                                        "menu.volume",
+                                        surface_metrics.label_lane_width,
+                                        surface_metrics.control_lane_width,
+                                        rtl,
+                                        [&]() {
+                                            VXUI( &ctx, "settings.form.volume.control.inner", {
+                                                .layout = {
+                                                    .sizing = { CLAY_SIZING_GROW( 0 ), CLAY_SIZING_FIT( 0 ) },
+                                                    .layoutDirection = CLAY_TOP_TO_BOTTOM,
+                                                },
+                                            } ) {
+                                                VXUI_SLIDER( &ctx, "settings.volume", &app.volume, 0.0f, 1.0f, ( vxui_slider_cfg ) {
+                                                    .show_value = true,
+                                                } );
+                                            }
+                                        } );
+                                }
+
+                                VXUI( &ctx, "settings.saves_section", {
+                                    .layout = {
+                                        .sizing = { CLAY_SIZING_GROW( 0 ), CLAY_SIZING_FIT( 0 ) },
+                                        .padding = CLAY_PADDING_ALL( 16 ),
+                                        .childGap = 10,
+                                        .layoutDirection = CLAY_TOP_TO_BOTTOM,
+                                    },
+                                    .backgroundColor = { 20, 32, 56, 192 },
+                                    .cornerRadius = CLAY_CORNER_RADIUS( 12 ),
+                                } ) {
+                                    VXUI_LABEL( &ctx, "menu.saves", section_cfg );
+                                    VXUI( &ctx, "settings.saves.row", {
+                                        .layout = {
+                                            .sizing = { CLAY_SIZING_GROW( 0 ), CLAY_SIZING_FIT( 0 ) },
+                                            .childGap = VXUI_DEMO_ROW_GAP,
+                                            .layoutDirection = CLAY_LEFT_TO_RIGHT,
+                                        },
+                                    } ) {
+                                        auto emit_spacer_lane = [&]() {
+                                            CLAY( vxui__clay_id_from_hash( vxui_id( "settings.saves.spacer" ) ), {
+                                                .layout = {
+                                                    .sizing = { CLAY_SIZING_FIXED( surface_metrics.label_lane_width ), CLAY_SIZING_FIT( 0 ) },
+                                                },
+                                            } ) {}
+                                        };
+
+                                        auto emit_lane = [&]() {
+                                            CLAY( vxui__clay_id_from_hash( vxui_id( "settings.saves.lane" ) ), {
+                                                .layout = {
+                                                    .sizing = { CLAY_SIZING_FIXED( surface_metrics.control_lane_width ), CLAY_SIZING_FIT( 0 ) },
+                                                    .childGap = 8,
+                                                    .layoutDirection = CLAY_TOP_TO_BOTTOM,
+                                                },
+                                            } ) {
+                                                for ( int i = 0; i < 8; ++i ) {
+                                                    char slot_id[ 64 ] = {};
+                                                    std::snprintf( slot_id, sizeof( slot_id ), "settings.saves.slot.%d", i );
+                                                    vxui_demo_emit_save_slot_row( &ctx, slot_id, slot_keys[ i ], surface_metrics.control_lane_width, control_height, rtl );
+                                                }
+                                            }
+                                        };
+
+                                        if ( rtl ) {
+                                            emit_lane();
+                                            emit_spacer_lane();
+                                        } else {
+                                            emit_spacer_lane();
+                                            emit_lane();
+                                        }
+                                    }
+                                }
                             }
                         }
                     }
-                }
 
-                VXUI( &ctx, "settings.footer", {
-                    .layout = {
-                        .sizing = { CLAY_SIZING_GROW( 0 ), CLAY_SIZING_FIT( 0 ) },
-                        .childGap = VXUI_DEMO_ROW_GAP,
-                        .layoutDirection = CLAY_TOP_TO_BOTTOM,
-                    },
-                } ) {
-                    VXUI( &ctx, "settings.prompts", {
+                    VXUI( &ctx, "settings.footer", {
                         .layout = {
-                            .sizing = { CLAY_SIZING_FIT( 0 ), CLAY_SIZING_FIT( 0 ) },
-                            .childGap = VXUI_DEMO_INLINE_GAP,
-                            .childAlignment = { .y = CLAY_ALIGN_Y_CENTER },
-                            .layoutDirection = vxui__resolve_dir( CLAY_LEFT_TO_RIGHT, rtl ),
-                        },
-                    } ) {
-                        vxui_demo_emit_prompt_pair( &ctx, "settings.prompt.confirm", "action.confirm", "menu.confirm" );
-                        vxui_demo_emit_prompt_pair( &ctx, "settings.prompt.cancel", "action.cancel", "menu.cancel" );
-                    }
-
-                    VXUI( &ctx, "settings.status", {
-                        .layout = {
-                            .sizing = { CLAY_SIZING_FIT( 0 ), CLAY_SIZING_FIT( 0 ) },
+                            .sizing = { CLAY_SIZING_GROW( 0 ), CLAY_SIZING_FIT( 0 ) },
+                            .padding = CLAY_PADDING_ALL( 18 ),
                             .childGap = VXUI_DEMO_ROW_GAP,
                             .layoutDirection = CLAY_TOP_TO_BOTTOM,
                         },
+                        .backgroundColor = { 24, 36, 64, 244 },
+                        .cornerRadius = CLAY_CORNER_RADIUS( 12 ),
                     } ) {
-                        vxui_demo_emit_label_pair( &ctx, "settings.status.locale", "status.label.locale", locale_name_key, rtl );
-                        vxui_demo_emit_label_pair( &ctx, "settings.status.prompts", "status.label.prompts", prompt_name_key, rtl );
-                        vxui_demo_emit_label_pair( &ctx, "settings.status.screens", "status.label.screens", top_name_key, rtl );
-                    }
+                        vxui_demo_emit_footer_action_bar( &ctx, "settings.footer.actions", rtl, [&]() {
+                            vxui_demo_emit_action_button( &ctx, "settings.back", "menu.back", vxui_demo_close_settings, ( vxui_action_cfg ) {
+                                .userdata = &app,
+                            }, control_height );
+                            VXUI_TRAIT( VXUI_TRAIT_GLOW, ( vxui_demo_glow ) { .padding = 6.0f, .alpha = 0.25f } );
 
-                    vxui_demo_emit_action_button( &ctx, "settings.back", "menu.back", vxui_demo_close_settings, ( vxui_action_cfg ) {
-                        .userdata = &app,
-                    }, control_height );
-                    VXUI_TRAIT( VXUI_TRAIT_GLOW, ( vxui_demo_glow ) { .padding = 6.0f, .alpha = 0.25f } );
-                }
-                } /* settings.content */
+                            VXUI( &ctx, "settings.prompts", {
+                                .layout = {
+                                    .sizing = { CLAY_SIZING_FIT( 0 ), CLAY_SIZING_FIT( 0 ) },
+                                    .childGap = VXUI_DEMO_INLINE_GAP,
+                                    .childAlignment = { .y = CLAY_ALIGN_Y_CENTER },
+                                    .layoutDirection = vxui__resolve_dir( CLAY_LEFT_TO_RIGHT, rtl ),
+                                },
+                            } ) {
+                                vxui_demo_emit_prompt_pair( &ctx, "settings.prompt.confirm", "action.confirm", "menu.confirm" );
+                                vxui_demo_emit_prompt_pair( &ctx, "settings.prompt.cancel", "action.cancel", "menu.cancel" );
+                            }
+                        } );
+
+                        VXUI( &ctx, "settings.status", {
+                            .layout = {
+                                .sizing = { CLAY_SIZING_GROW( 0 ), CLAY_SIZING_FIT( 0 ) },
+                            },
+                        } ) {
+                            vxui_demo_emit_status_summary( &ctx, "settings.status.summary", locale_name_key, prompt_name_key, top_name_key, screen_count, rtl );
+                        }
+                    }
+                } /* settings.surface */
             } /* settings */
         } else {
+            const vxui_demo_surface_metrics surface_metrics =
+                vxui_demo_compute_surface_metrics( viewport_width, ctx.locale, VXUI_DEMO_SURFACE_MAIN_MENU );
             VXUI( &ctx, "main_menu", {
                 .layout = {
                     .sizing = { CLAY_SIZING_GROW( 0 ), CLAY_SIZING_GROW( 0 ) },
-                    .padding = CLAY_PADDING_ALL( 18 ),
+                    .padding = CLAY_PADDING_ALL( VXUI_DEMO_OUTER_PADDING ),
+                    .childAlignment = { .x = CLAY_ALIGN_X_CENTER },
+                    .layoutDirection = CLAY_TOP_TO_BOTTOM,
                 },
                 .backgroundColor = { 8, 12, 22, 255 },
             } ) {
-                VXUI( &ctx, "main.content", {
+                VXUI( &ctx, "main.surface", {
                     .layout = {
-                        .sizing = { CLAY_SIZING_GROW( 0, VXUI_DEMO_CONTENT_MAX_WIDTH ), CLAY_SIZING_FIT( 0 ) },
+                        .sizing = { CLAY_SIZING_FIXED( surface_metrics.surface_width ), CLAY_SIZING_FIT( 0 ) },
+                        .padding = { VXUI_DEMO_SURFACE_PADDING_X, VXUI_DEMO_SURFACE_PADDING_X, VXUI_DEMO_SURFACE_PADDING_Y, VXUI_DEMO_SURFACE_PADDING_Y },
                         .childGap = VXUI_DEMO_SCREEN_GAP,
                         .childAlignment = { .x = rtl ? CLAY_ALIGN_X_RIGHT : CLAY_ALIGN_X_LEFT },
                         .layoutDirection = CLAY_TOP_TO_BOTTOM,
                     },
+                    .backgroundColor = { 15, 21, 38, 244 },
+                    .cornerRadius = CLAY_CORNER_RADIUS( 18 ),
                 } ) {
-                VXUI( &ctx, "main.hero", {
-                    .layout = {
-                        .sizing = { CLAY_SIZING_FIT( 0 ), CLAY_SIZING_FIT( 0 ) },
-                        .childGap = 0,
-                        .layoutDirection = CLAY_TOP_TO_BOTTOM,
-                    },
-                } ) {
-                    VXUI_LABEL( &ctx, "menu.main", title_cfg );
-                    VXUI_TRAIT( VXUI_TRAIT_PULSE, ( vxui_demo_pulse ) { .speed = 2.0f, .scale = 0.05f, .alpha = 0.14f } );
-
-                    vxui_demo_emit_action_button( &ctx, "main.settings", "menu.open_settings", vxui_demo_open_settings, ( vxui_action_cfg ) {
-                        .userdata = &app,
-                    }, control_height );
-                    VXUI_TRAIT( VXUI_TRAIT_GLOW, ( vxui_demo_glow ) { .padding = 6.0f, .alpha = 0.20f } );
-                    VXUI_TRAIT( VXUI_TRAIT_SCANLINE, ( vxui_demo_scanline ) { .spacing = 6.0f, .alpha = 0.10f } );
-                }
-
-                VXUI( &ctx, "main.meta", {
-                    .layout = {
-                        .sizing = { CLAY_SIZING_FIT( 0 ), CLAY_SIZING_FIT( 0 ) },
-                        .childGap = VXUI_DEMO_SCREEN_GAP,
-                        .layoutDirection = CLAY_TOP_TO_BOTTOM,
-                    },
-                } ) {
-                    VXUI( &ctx, "main.prompts", {
+                    VXUI( &ctx, "main.hero", {
                         .layout = {
-                            .sizing = { CLAY_SIZING_FIT( 0 ), CLAY_SIZING_FIT( 0 ) },
-                            .childGap = VXUI_DEMO_INLINE_GAP,
-                            .childAlignment = { .y = CLAY_ALIGN_Y_CENTER },
-                            .layoutDirection = vxui__resolve_dir( CLAY_LEFT_TO_RIGHT, rtl ),
+                            .sizing = { CLAY_SIZING_GROW( 0 ), CLAY_SIZING_FIT( 0 ) },
+                            .padding = CLAY_PADDING_ALL( 20 ),
+                            .childGap = 14,
+                            .layoutDirection = CLAY_TOP_TO_BOTTOM,
                         },
+                        .backgroundColor = { 24, 36, 64, 224 },
+                        .cornerRadius = CLAY_CORNER_RADIUS( 16 ),
                     } ) {
-                        vxui_demo_emit_prompt_pair( &ctx, "main.prompt.confirm", "action.confirm", "menu.confirm" );
-                        vxui_demo_emit_prompt_pair( &ctx, "main.prompt.cancel", "action.cancel", "menu.cancel" );
+                        VXUI_LABEL( &ctx, "menu.main", title_cfg );
+                        VXUI_TRAIT( VXUI_TRAIT_PULSE, ( vxui_demo_pulse ) { .speed = 2.0f, .scale = 0.05f, .alpha = 0.14f } );
+
+                        vxui_demo_emit_action_button( &ctx, "main.settings", "menu.open_settings", vxui_demo_open_settings, ( vxui_action_cfg ) {
+                            .userdata = &app,
+                        }, control_height );
+                        VXUI_TRAIT( VXUI_TRAIT_GLOW, ( vxui_demo_glow ) { .padding = 6.0f, .alpha = 0.20f } );
+                        VXUI_TRAIT( VXUI_TRAIT_SCANLINE, ( vxui_demo_scanline ) { .spacing = 6.0f, .alpha = 0.10f } );
                     }
 
-                    VXUI( &ctx, "main.status", {
+                    VXUI( &ctx, "main.meta", {
                         .layout = {
-                            .sizing = { CLAY_SIZING_FIT( 0 ), CLAY_SIZING_FIT( 0 ) },
+                            .sizing = { CLAY_SIZING_GROW( 0 ), CLAY_SIZING_FIT( 0 ) },
+                            .padding = CLAY_PADDING_ALL( 18 ),
                             .childGap = VXUI_DEMO_ROW_GAP,
                             .layoutDirection = CLAY_TOP_TO_BOTTOM,
                         },
+                        .backgroundColor = { 22, 34, 58, 220 },
+                        .cornerRadius = CLAY_CORNER_RADIUS( 14 ),
                     } ) {
-                        vxui_demo_emit_label_pair( &ctx, "main.status.locale", "status.label.locale", locale_name_key, rtl );
-                        vxui_demo_emit_label_pair( &ctx, "main.status.prompts", "status.label.prompts", prompt_name_key, rtl );
-                        vxui_demo_emit_label_pair( &ctx, "main.status.screens", "status.label.screens", top_name_key, rtl );
-                    }
-                }
+                        VXUI( &ctx, "main.prompts", {
+                            .layout = {
+                                .sizing = { CLAY_SIZING_FIT( 0 ), CLAY_SIZING_FIT( 0 ) },
+                                .childGap = VXUI_DEMO_INLINE_GAP,
+                                .childAlignment = { .y = CLAY_ALIGN_Y_CENTER },
+                                .layoutDirection = vxui__resolve_dir( CLAY_LEFT_TO_RIGHT, rtl ),
+                            },
+                        } ) {
+                            vxui_demo_emit_prompt_pair( &ctx, "main.prompt.confirm", "action.confirm", "menu.confirm" );
+                            vxui_demo_emit_prompt_pair( &ctx, "main.prompt.cancel", "action.cancel", "menu.cancel" );
+                        }
 
-                VXUI( &ctx, "main.help", {
-                    .layout = {
-                        .sizing = { CLAY_SIZING_GROW( 0 ), CLAY_SIZING_FIT( 0 ) },
-                        .childGap = VXUI_DEMO_ROW_GAP,
-                        .layoutDirection = CLAY_TOP_TO_BOTTOM,
-                    },
-                } ) {
-                    VXUI_LABEL( &ctx, "menu.controls", section_cfg );
-                    VXUI_LABEL( &ctx, "hint.controls.0", ( vxui_label_cfg ) { 0 } );
-                    VXUI_LABEL( &ctx, "hint.controls.1", ( vxui_label_cfg ) { 0 } );
-                    VXUI_LABEL( &ctx, "hint.controls.2", ( vxui_label_cfg ) { 0 } );
-                    VXUI_LABEL( &ctx, "hint.controls.3", ( vxui_label_cfg ) { 0 } );
-                }
-                } /* main.content */
+                        VXUI( &ctx, "main.status", {
+                            .layout = {
+                                .sizing = { CLAY_SIZING_GROW( 0 ), CLAY_SIZING_FIT( 0 ) },
+                            },
+                        } ) {
+                            vxui_demo_emit_status_summary( &ctx, "main.status.summary", locale_name_key, prompt_name_key, top_name_key, screen_count, rtl );
+                        }
+                    }
+
+                    vxui_demo_emit_controls_block( &ctx, "main.help", &section_cfg );
+                } /* main.surface */
             } /* main_menu */
         }
 
@@ -2951,7 +3572,9 @@ int main( int argc, char** argv )
 #endif
 
         vxui_draw_list list = vxui_end( &ctx );
+        vxui_demo_sync_settings_body_scroll( &app, &ctx );
 #ifdef VXUI_DEBUG
+        vxui_demo_debug_validate_demo_layout( &ctx, app.show_settings, &list );
         if ( ctx.debug_seq_editor.open ) {
             vxui_debug_capture_preview( &ctx, &list );
             ctx.debug_seq_editor.preview_playing = ctx.debug_seq_editor.preview_snapshot.command_count > 0;

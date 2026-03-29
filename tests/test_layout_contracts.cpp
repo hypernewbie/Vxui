@@ -3,6 +3,7 @@
 #include <cstdlib>
 #include <cstring>
 
+#include "../demo/internal/theme.h"
 #include "../third_party/utest.h"
 #include "../vxui.h"
 #include "test_layout_helpers.h"
@@ -116,3 +117,18 @@ UTEST( layout_contracts, requires_debug_build )
 }
 
 #endif
+
+UTEST( demo_theme_contracts, command_deck_alpha_roles_follow_usability_contract )
+{
+    const vxui_demo_command_deck_theme& theme = vxui_demo_command_deck_theme_tokens();
+    EXPECT_TRUE( theme.hero_surface_fill.a >= 244 && theme.hero_surface_fill.a <= 252 );
+    EXPECT_TRUE( theme.primary_panel_fill.a >= 236 && theme.primary_panel_fill.a <= 248 );
+    EXPECT_TRUE( theme.secondary_panel_fill.a >= 224 && theme.secondary_panel_fill.a <= 238 );
+    EXPECT_TRUE( theme.utility_fill.a >= 242 && theme.utility_fill.a <= 252 );
+    EXPECT_TRUE( theme.passive_row_fill.a >= 228 && theme.passive_row_fill.a <= 238 );
+    EXPECT_TRUE( theme.focused_row_fill.a >= 248 && theme.focused_row_fill.a <= 255 );
+    EXPECT_TRUE( theme.badge_fill.a >= 236 && theme.badge_fill.a <= 248 );
+    EXPECT_TRUE( theme.focused_row_fill.a > theme.passive_row_fill.a );
+    EXPECT_TRUE( theme.utility_fill.a >= theme.primary_panel_fill.a );
+    EXPECT_TRUE( theme.surface_scanline_alpha >= 0.02f && theme.surface_scanline_alpha <= 0.03f );
+}

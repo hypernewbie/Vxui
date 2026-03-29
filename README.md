@@ -52,6 +52,8 @@ VXUI does not own your renderer. `vxui_end()` returns a draw list. You consume i
 
 If you want a sealed framework with a private engine core, this is not that repo.
 
+Shared demo-only support now lives under `demo/internal/` and is used by the demo runtime plus tests; it is not part of the public library surface.
+
 ## Current Feature Set
 
 ### Core Runtime
@@ -176,7 +178,15 @@ ctest --test-dir build --output-on-failure
 
 When `VXUI_BUILD_DEMO=ON`, CMake fetches demo-only FreeType and HarfBuzz with `FetchContent` and builds the TinyWindow/OpenGL demo from [`main.cpp`](main.cpp).
 
-The demo currently mirrors the VEFontCache demo stack:
+The canonical demo is now a playable stub shmup-style "Command Deck" front end:
+
+- boot + title flow
+- multi-screen command deck navigation
+- `vxui_menu`-driven menu/form surfaces
+- locale and prompt-table switching
+- in-app sequence debug overlay
+
+It still mirrors the VEFontCache renderer stack:
 
 - TinyWindow
 - OpenGL
@@ -351,7 +361,7 @@ VXUI( &ctx, "screen.pause", {} ) {
 }
 ```
 
-The existing demo remains unchanged. A dedicated BR-flavored demo can now be built as a follow-up on top of the extension.
+The demo now uses the menu extension to drive a larger front-end sample rather than the earlier main/settings utility flow.
 
 ## Public API Surface
 

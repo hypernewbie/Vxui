@@ -3,9 +3,10 @@
 #include <cstring>
 #include <string>
 
-#include "../demo_layout_contract.h"
+#include "../demo/internal/layout_contract.h"
 #include "../third_party/utest.h"
 #include "../vxui.h"
+#include "../vxui_menu.h"
 #include "test_support.h"
 
 enum
@@ -1736,5 +1737,481 @@ UTEST_F( locale_fixture, focused_lower_save_slot_stays_inside_body_viewport )
         EXPECT_GE( focused_text.y, body_scroll.y - 1.0f );
         EXPECT_LT( focused_text.y, footer.y );
         EXPECT_FALSE( vxui__locale_any_slot_text_below( &list, footer.y ) );
+    }
+}
+
+static bool vxui__locale_find_menu_scope_bounds( const char* id, int offset, vxui_rect* out )
+{
+    Clay_ElementId clay_id = {};
+    clay_id.id = vxui_idi( id, ( uint32_t ) offset );
+    Clay_ElementData data = Clay_GetElementData( clay_id );
+    if ( !data.found ) {
+        return false;
+    }
+    if ( out ) {
+        *out = {
+            data.boundingBox.x,
+            data.boundingBox.y,
+            data.boundingBox.width,
+            data.boundingBox.height,
+        };
+    }
+    return true;
+}
+
+static void vxui__locale_render_command_deck_title( locale_fixture* fixture, const char* locale )
+{
+    fixture->ctx.cfg.screen_width = 1280;
+    fixture->ctx.cfg.screen_height = 720;
+    vxui_set_font_resolver( &fixture->ctx, vxui__locale_font_resolver, fixture );
+    vxui_set_locale( &fixture->ctx, locale );
+
+    const bool rtl = fixture->ctx.rtl;
+    const vxui_demo_surface_metrics metrics =
+        vxui_demo_compute_surface_metrics( 1280.0f - VXUI_DEMO_LAYOUT_OUTER_PADDING * 2.0f, locale, VXUI_DEMO_SURFACE_TITLE );
+
+    vxui_begin( &fixture->ctx, 0.016f );
+    VXUI( &fixture->ctx, "title", {
+        .layout = {
+            .sizing = { CLAY_SIZING_GROW( 0 ), CLAY_SIZING_GROW( 0 ) },
+            .padding = CLAY_PADDING_ALL( ( uint16_t ) VXUI_DEMO_LAYOUT_OUTER_PADDING ),
+            .childAlignment = { .x = CLAY_ALIGN_X_CENTER },
+            .layoutDirection = CLAY_TOP_TO_BOTTOM,
+        },
+    } ) {
+        VXUI( &fixture->ctx, "title.surface", {
+            .layout = {
+                .sizing = { CLAY_SIZING_FIXED( metrics.surface_width ), CLAY_SIZING_GROW( 0 ) },
+                .padding = {
+                    ( uint16_t ) VXUI_DEMO_LAYOUT_SURFACE_PADDING_X,
+                    ( uint16_t ) VXUI_DEMO_LAYOUT_SURFACE_PADDING_X,
+                    ( uint16_t ) VXUI_DEMO_LAYOUT_SURFACE_PADDING_Y,
+                    ( uint16_t ) VXUI_DEMO_LAYOUT_SURFACE_PADDING_Y,
+                },
+                .childGap = ( uint16_t ) VXUI_DEMO_LAYOUT_SECTION_GAP,
+                .childAlignment = { .x = rtl ? CLAY_ALIGN_X_RIGHT : CLAY_ALIGN_X_LEFT },
+                .layoutDirection = CLAY_TOP_TO_BOTTOM,
+            },
+        } ) {
+            VXUI( &fixture->ctx, "title.hero", {
+                .layout = {
+                    .sizing = { CLAY_SIZING_GROW( 0 ), CLAY_SIZING_FIT( 0 ) },
+                    .padding = CLAY_PADDING_ALL( 24 ),
+                    .childGap = 12,
+                    .layoutDirection = CLAY_TOP_TO_BOTTOM,
+                },
+            } ) {
+                VXUI_LABEL( &fixture->ctx, "label.title", ( vxui_label_cfg ) {
+                    .font_id = VXUI_TEST_FONT_ROLE_TITLE,
+                    .font_size = 44.0f,
+                } );
+                VXUI_LABEL( &fixture->ctx, "label.body", ( vxui_label_cfg ) { 0 } );
+            }
+            VXUI( &fixture->ctx, "title.action_band", {
+                .layout = {
+                    .sizing = { CLAY_SIZING_GROW( 0 ), CLAY_SIZING_FIT( 0 ) },
+                    .padding = CLAY_PADDING_ALL( 18 ),
+                    .childGap = 10,
+                    .layoutDirection = CLAY_TOP_TO_BOTTOM,
+                },
+            } ) {
+                VXUI_PROMPT( &fixture->ctx, "action.confirm" );
+                VXUI_LABEL( &fixture->ctx, "prompt.confirm.label", ( vxui_label_cfg ) { 0 } );
+            }
+        }
+    }
+    ( void ) vxui_end( &fixture->ctx );
+}
+
+static void vxui__locale_render_command_deck_main_menu( locale_fixture* fixture, const char* locale )
+{
+    fixture->ctx.cfg.screen_width = 1280;
+    fixture->ctx.cfg.screen_height = 720;
+    vxui_set_font_resolver( &fixture->ctx, vxui__locale_font_resolver, fixture );
+    vxui_set_locale( &fixture->ctx, locale );
+
+    const bool rtl = fixture->ctx.rtl;
+    const vxui_demo_surface_metrics metrics =
+        vxui_demo_compute_surface_metrics( 1280.0f - VXUI_DEMO_LAYOUT_OUTER_PADDING * 2.0f, locale, VXUI_DEMO_SURFACE_MAIN_MENU );
+    const float menu_width = std::clamp( metrics.content_width * 0.40f, 290.0f, 360.0f );
+    const float preview_width = std::max( 260.0f, metrics.content_width - menu_width - VXUI_DEMO_LAYOUT_SECTION_GAP );
+
+    vxui_begin( &fixture->ctx, 0.016f );
+    VXUI( &fixture->ctx, "main_menu", {
+        .layout = {
+            .sizing = { CLAY_SIZING_GROW( 0 ), CLAY_SIZING_GROW( 0 ) },
+            .padding = CLAY_PADDING_ALL( ( uint16_t ) VXUI_DEMO_LAYOUT_OUTER_PADDING ),
+            .childAlignment = { .x = CLAY_ALIGN_X_CENTER },
+            .layoutDirection = CLAY_TOP_TO_BOTTOM,
+        },
+    } ) {
+        VXUI( &fixture->ctx, "main.surface", {
+            .layout = {
+                .sizing = { CLAY_SIZING_FIXED( metrics.surface_width ), CLAY_SIZING_GROW( 0 ) },
+                .padding = {
+                    ( uint16_t ) VXUI_DEMO_LAYOUT_SURFACE_PADDING_X,
+                    ( uint16_t ) VXUI_DEMO_LAYOUT_SURFACE_PADDING_X,
+                    ( uint16_t ) VXUI_DEMO_LAYOUT_SURFACE_PADDING_Y,
+                    ( uint16_t ) VXUI_DEMO_LAYOUT_SURFACE_PADDING_Y,
+                },
+                .childGap = ( uint16_t ) VXUI_DEMO_LAYOUT_SECTION_GAP,
+                .childAlignment = { .x = rtl ? CLAY_ALIGN_X_RIGHT : CLAY_ALIGN_X_LEFT },
+                .layoutDirection = CLAY_TOP_TO_BOTTOM,
+            },
+        } ) {
+            VXUI( &fixture->ctx, "main.hero", {
+                .layout = {
+                    .sizing = { CLAY_SIZING_GROW( 0 ), CLAY_SIZING_FIT( 0 ) },
+                    .padding = CLAY_PADDING_ALL( 20 ),
+                    .layoutDirection = CLAY_TOP_TO_BOTTOM,
+                },
+            } ) {
+                VXUI_LABEL( &fixture->ctx, "label.title", ( vxui_label_cfg ) {
+                    .font_id = VXUI_TEST_FONT_ROLE_TITLE,
+                    .font_size = 44.0f,
+                } );
+            }
+            VXUI( &fixture->ctx, "main.deck", {
+                .layout = {
+                    .sizing = { CLAY_SIZING_GROW( 0 ), CLAY_SIZING_GROW( 180.0f ) },
+                    .childGap = ( uint16_t ) VXUI_DEMO_LAYOUT_SECTION_GAP,
+                    .layoutDirection = CLAY_LEFT_TO_RIGHT,
+                },
+            } ) {
+                VXUI( &fixture->ctx, "main.command_panel", {
+                    .layout = { .sizing = { CLAY_SIZING_FIXED( menu_width ), CLAY_SIZING_GROW( 0 ) } },
+                } ) {
+                    VXUI_LABEL( &fixture->ctx, "menu.sortie", ( vxui_label_cfg ) { 0 } );
+                    VXUI_LABEL( &fixture->ctx, "menu.loadout", ( vxui_label_cfg ) { 0 } );
+                    VXUI_LABEL( &fixture->ctx, "menu.settings", ( vxui_label_cfg ) { 0 } );
+                }
+                VXUI( &fixture->ctx, "main.preview_panel", {
+                    .layout = {
+                        .sizing = { CLAY_SIZING_FIXED( preview_width ), CLAY_SIZING_GROW( 0 ) },
+                        .padding = CLAY_PADDING_ALL( 20 ),
+                        .childGap = 8,
+                        .layoutDirection = CLAY_TOP_TO_BOTTOM,
+                    },
+                } ) {
+                    VXUI_LABEL( &fixture->ctx, "label.body", ( vxui_label_cfg ) { 0 } );
+                    VXUI_LABEL( &fixture->ctx, "label.long", ( vxui_label_cfg ) { 0 } );
+                }
+            }
+            VXUI( &fixture->ctx, "main.footer", {
+                .layout = {
+                    .sizing = { CLAY_SIZING_GROW( 0 ), CLAY_SIZING_FIT( 0 ) },
+                    .padding = CLAY_PADDING_ALL( 18 ),
+                    .childGap = ( uint16_t ) VXUI_DEMO_LAYOUT_ROW_GAP,
+                    .layoutDirection = CLAY_TOP_TO_BOTTOM,
+                },
+            } ) {
+                vxui__locale_emit_status_summary( fixture, "main.footer.status", "label.hello", "label.right", "label.left", 3, rtl );
+            }
+        }
+    }
+    ( void ) vxui_end( &fixture->ctx );
+}
+
+static void vxui__locale_render_command_deck_settings_menu( locale_fixture* fixture, const char* locale )
+{
+    static const char* kToggleKeys[] = { "Off", "On" };
+    static const char* kPromptKeys[] = { "Keyboard", "Gamepad" };
+    static const char* kLocaleKeys[] = { "English", "Japanese", "Arabic" };
+
+    fixture->ctx.cfg.screen_width = 1280;
+    fixture->ctx.cfg.screen_height = 720;
+    vxui_set_font_resolver( &fixture->ctx, vxui__locale_font_resolver, fixture );
+    vxui_set_locale( &fixture->ctx, locale );
+
+    const bool rtl = fixture->ctx.rtl;
+    const vxui_demo_surface_metrics metrics =
+        vxui_demo_compute_surface_metrics( 1280.0f - VXUI_DEMO_LAYOUT_OUTER_PADDING * 2.0f, locale, VXUI_DEMO_SURFACE_SETTINGS );
+    vxui_menu_style style = vxui_menu_style_form();
+    style.label_lane_width = metrics.label_lane_width;
+    int difficulty = 1;
+    float volume = 0.4f;
+    int scanlines = 1;
+    int prompt_table = 0;
+    int locale_index = 0;
+
+    vxui_begin( &fixture->ctx, 0.016f );
+    VXUI( &fixture->ctx, "settings", {
+        .layout = {
+            .sizing = { CLAY_SIZING_GROW( 0 ), CLAY_SIZING_GROW( 0 ) },
+            .padding = CLAY_PADDING_ALL( ( uint16_t ) VXUI_DEMO_LAYOUT_OUTER_PADDING ),
+            .childAlignment = { .x = CLAY_ALIGN_X_CENTER },
+            .layoutDirection = CLAY_TOP_TO_BOTTOM,
+        },
+    } ) {
+        VXUI( &fixture->ctx, "settings.surface", {
+            .layout = {
+                .sizing = { CLAY_SIZING_FIXED( metrics.surface_width ), CLAY_SIZING_GROW( 0 ) },
+                .padding = {
+                    ( uint16_t ) VXUI_DEMO_LAYOUT_SURFACE_PADDING_X,
+                    ( uint16_t ) VXUI_DEMO_LAYOUT_SURFACE_PADDING_X,
+                    ( uint16_t ) VXUI_DEMO_LAYOUT_SURFACE_PADDING_Y,
+                    ( uint16_t ) VXUI_DEMO_LAYOUT_SURFACE_PADDING_Y,
+                },
+                .childGap = ( uint16_t ) VXUI_DEMO_LAYOUT_SECTION_GAP,
+                .childAlignment = { .x = rtl ? CLAY_ALIGN_X_RIGHT : CLAY_ALIGN_X_LEFT },
+                .layoutDirection = CLAY_TOP_TO_BOTTOM,
+            },
+        } ) {
+            VXUI( &fixture->ctx, "settings.header", {
+                .layout = {
+                    .sizing = { CLAY_SIZING_GROW( 0 ), CLAY_SIZING_FIT( 0 ) },
+                    .layoutDirection = CLAY_TOP_TO_BOTTOM,
+                },
+            } ) {
+                VXUI_LABEL( &fixture->ctx, "menu.settings", ( vxui_label_cfg ) {
+                    .font_id = VXUI_TEST_FONT_ROLE_TITLE,
+                    .font_size = 44.0f,
+                } );
+            }
+            VXUI( &fixture->ctx, "settings.body_panel", {
+                .layout = {
+                    .sizing = { CLAY_SIZING_GROW( 0 ), CLAY_SIZING_GROW( 180.0f ) },
+                },
+            } ) {
+                vxui_menu_state menu_state = {};
+                vxui_menu_begin( &fixture->ctx, &menu_state, "settings.body_menu", ( vxui_menu_cfg ) {
+                    .style = &style,
+                    .viewport_height = 260.0f,
+                } );
+                vxui_menu_section( &fixture->ctx, &menu_state, "interface", "menu.interface", ( vxui_menu_section_cfg ) { 0 } );
+                vxui_menu_option( &fixture->ctx, &menu_state, "difficulty", "menu.challenge", &difficulty, kLocaleKeys, 3, ( vxui_menu_row_cfg ) { 0 }, ( vxui_option_cfg ) { 0 } );
+                vxui_menu_section( &fixture->ctx, &menu_state, "audio", "menu.audio", ( vxui_menu_section_cfg ) { 0 } );
+                vxui_menu_slider( &fixture->ctx, &menu_state, "volume", "menu.volume", &volume, 0.0f, 1.0f, ( vxui_menu_row_cfg ) { 0 }, ( vxui_slider_cfg ) {
+                    .show_value = true,
+                    .format = "%.2f",
+                } );
+                vxui_menu_section( &fixture->ctx, &menu_state, "visuals", "menu.visual_fx", ( vxui_menu_section_cfg ) { 0 } );
+                vxui_menu_option( &fixture->ctx, &menu_state, "scanlines", "menu.scanlines", &scanlines, kToggleKeys, 2, ( vxui_menu_row_cfg ) { 0 }, ( vxui_option_cfg ) { 0 } );
+                vxui_menu_option( &fixture->ctx, &menu_state, "prompt_table", "menu.prompts", &prompt_table, kPromptKeys, 2, ( vxui_menu_row_cfg ) { 0 }, ( vxui_option_cfg ) { 0 } );
+                vxui_menu_option( &fixture->ctx, &menu_state, "locale", "menu.locale", &locale_index, kLocaleKeys, 3, ( vxui_menu_row_cfg ) { 0 }, ( vxui_option_cfg ) { 0 } );
+                vxui_menu_section( &fixture->ctx, &menu_state, "overflow_a", "Overflow A", ( vxui_menu_section_cfg ) { 0 } );
+                vxui_menu_option( &fixture->ctx, &menu_state, "overflow_0", "Option 0", &scanlines, kToggleKeys, 2, ( vxui_menu_row_cfg ) { 0 }, ( vxui_option_cfg ) { 0 } );
+                vxui_menu_option( &fixture->ctx, &menu_state, "overflow_1", "Option 1", &scanlines, kToggleKeys, 2, ( vxui_menu_row_cfg ) { 0 }, ( vxui_option_cfg ) { 0 } );
+                vxui_menu_option( &fixture->ctx, &menu_state, "overflow_2", "Option 2", &scanlines, kToggleKeys, 2, ( vxui_menu_row_cfg ) { 0 }, ( vxui_option_cfg ) { 0 } );
+                vxui_menu_section( &fixture->ctx, &menu_state, "overflow_b", "Overflow B", ( vxui_menu_section_cfg ) { 0 } );
+                vxui_menu_option( &fixture->ctx, &menu_state, "overflow_3", "Option 3", &scanlines, kToggleKeys, 2, ( vxui_menu_row_cfg ) { 0 }, ( vxui_option_cfg ) { 0 } );
+                vxui_menu_option( &fixture->ctx, &menu_state, "overflow_4", "Option 4", &scanlines, kToggleKeys, 2, ( vxui_menu_row_cfg ) { 0 }, ( vxui_option_cfg ) { 0 } );
+                vxui_menu_end( &fixture->ctx, &menu_state );
+            }
+            VXUI( &fixture->ctx, "settings.footer", {
+                .layout = {
+                    .sizing = { CLAY_SIZING_GROW( 0 ), CLAY_SIZING_FIT( 0 ) },
+                    .padding = CLAY_PADDING_ALL( 18 ),
+                    .childGap = ( uint16_t ) VXUI_DEMO_LAYOUT_ROW_GAP,
+                    .layoutDirection = CLAY_TOP_TO_BOTTOM,
+                },
+            } ) {
+                VXUI_LABEL( &fixture->ctx, "menu.return_command_deck", ( vxui_label_cfg ) { 0 } );
+            }
+        }
+    }
+    ( void ) vxui_end( &fixture->ctx );
+}
+
+static void vxui__locale_render_command_deck_sortie( locale_fixture* fixture, const char* locale )
+{
+    fixture->ctx.cfg.screen_width = 1280;
+    fixture->ctx.cfg.screen_height = 720;
+    vxui_set_font_resolver( &fixture->ctx, vxui__locale_font_resolver, fixture );
+    vxui_set_locale( &fixture->ctx, locale );
+
+    const bool rtl = fixture->ctx.rtl;
+    const vxui_demo_surface_metrics metrics =
+        vxui_demo_compute_surface_metrics( 1280.0f - VXUI_DEMO_LAYOUT_OUTER_PADDING * 2.0f, locale, VXUI_DEMO_SURFACE_SORTIE );
+    const float left_width = std::clamp( metrics.content_width * 0.34f, 300.0f, 360.0f );
+    const float right_width = std::clamp( metrics.content_width * 0.24f, 220.0f, 280.0f );
+    const float center_width = std::max( 260.0f, metrics.content_width - left_width - right_width - VXUI_DEMO_LAYOUT_SECTION_GAP * 2.0f );
+
+    vxui_begin( &fixture->ctx, 0.016f );
+    VXUI( &fixture->ctx, "sortie", {
+        .layout = {
+            .sizing = { CLAY_SIZING_GROW( 0 ), CLAY_SIZING_GROW( 0 ) },
+            .padding = CLAY_PADDING_ALL( ( uint16_t ) VXUI_DEMO_LAYOUT_OUTER_PADDING ),
+            .childAlignment = { .x = CLAY_ALIGN_X_CENTER },
+            .layoutDirection = CLAY_TOP_TO_BOTTOM,
+        },
+    } ) {
+        VXUI( &fixture->ctx, "sortie.surface", {
+            .layout = {
+                .sizing = { CLAY_SIZING_FIXED( metrics.surface_width ), CLAY_SIZING_GROW( 0 ) },
+                .padding = {
+                    ( uint16_t ) VXUI_DEMO_LAYOUT_SURFACE_PADDING_X,
+                    ( uint16_t ) VXUI_DEMO_LAYOUT_SURFACE_PADDING_X,
+                    ( uint16_t ) VXUI_DEMO_LAYOUT_SURFACE_PADDING_Y,
+                    ( uint16_t ) VXUI_DEMO_LAYOUT_SURFACE_PADDING_Y,
+                },
+                .childGap = ( uint16_t ) VXUI_DEMO_LAYOUT_SECTION_GAP,
+                .childAlignment = { .x = rtl ? CLAY_ALIGN_X_RIGHT : CLAY_ALIGN_X_LEFT },
+                .layoutDirection = CLAY_TOP_TO_BOTTOM,
+            },
+        } ) {
+            VXUI_LABEL( &fixture->ctx, "menu.sortie", ( vxui_label_cfg ) {
+                .font_id = VXUI_TEST_FONT_ROLE_TITLE,
+                .font_size = 44.0f,
+            } );
+            VXUI( &fixture->ctx, "sortie.deck", {
+                .layout = {
+                    .sizing = { CLAY_SIZING_GROW( 0 ), CLAY_SIZING_GROW( 200.0f ) },
+                    .childGap = ( uint16_t ) VXUI_DEMO_LAYOUT_SECTION_GAP,
+                    .layoutDirection = CLAY_LEFT_TO_RIGHT,
+                },
+            } ) {
+                VXUI( &fixture->ctx, "sortie.menu_panel", {
+                    .layout = { .sizing = { CLAY_SIZING_FIXED( left_width ), CLAY_SIZING_GROW( 0 ) } },
+                } ) {
+                    VXUI_LABEL( &fixture->ctx, "sortie.section.operations", ( vxui_label_cfg ) { 0 } );
+                }
+                VXUI( &fixture->ctx, "sortie.briefing", {
+                    .layout = {
+                        .sizing = { CLAY_SIZING_FIXED( center_width ), CLAY_SIZING_GROW( 0 ) },
+                        .padding = CLAY_PADDING_ALL( 20 ),
+                        .layoutDirection = CLAY_TOP_TO_BOTTOM,
+                    },
+                } ) {
+                    VXUI_LABEL( &fixture->ctx, "label.long", ( vxui_label_cfg ) { 0 } );
+                }
+                VXUI( &fixture->ctx, "sortie.detail", {
+                    .layout = {
+                        .sizing = { CLAY_SIZING_FIXED( right_width ), CLAY_SIZING_GROW( 0 ) },
+                        .padding = CLAY_PADDING_ALL( 18 ),
+                        .layoutDirection = CLAY_TOP_TO_BOTTOM,
+                    },
+                } ) {
+                    VXUI_LABEL( &fixture->ctx, "label.body", ( vxui_label_cfg ) { 0 } );
+                }
+            }
+            VXUI( &fixture->ctx, "sortie.footer", {
+                .layout = {
+                    .sizing = { CLAY_SIZING_GROW( 0 ), CLAY_SIZING_FIT( 0 ) },
+                    .padding = CLAY_PADDING_ALL( 18 ),
+                    .layoutDirection = CLAY_TOP_TO_BOTTOM,
+                },
+            } ) {
+                VXUI_LABEL( &fixture->ctx, "menu.start_sortie", ( vxui_label_cfg ) { 0 } );
+            }
+        }
+    }
+    ( void ) vxui_end( &fixture->ctx );
+}
+
+UTEST_F( locale_fixture, command_deck_sequence_contract_declares_representative_enter_sequences )
+{
+    vxui_seq_step step = { 0, vxui_id( "dummy.surface" ), VXUI_PROP_OPACITY, 1.0f };
+    EXPECT_STREQ( vxui_demo_enter_sequence_name_for_screen( "main_menu" ), VXUI_DEMO_DEFAULT_WATCHED_SEQUENCE_NAME );
+    EXPECT_EQ( VXUI_DEMO_FRONTEND_ENTER_SEQUENCE_COUNT, 11 );
+
+    for ( int i = 0; i < VXUI_DEMO_FRONTEND_ENTER_SEQUENCE_COUNT; ++i ) {
+        vxui_register_seq( &utest_fixture->ctx, VXUI_DEMO_FRONTEND_ENTER_SEQUENCE_NAMES[ i ], &step, 1 );
+        ASSERT_TRUE( vxui_find_seq( &utest_fixture->ctx, VXUI_DEMO_FRONTEND_ENTER_SEQUENCE_NAMES[ i ] ) != nullptr );
+    }
+}
+
+UTEST_F( locale_fixture, command_deck_title_surface_uses_desktop_hero_spacing )
+{
+    const char* locales[] = { "en", "ja-JP", "ar" };
+    const vxui_demo_surface_contract contract = vxui_demo_get_surface_contract( VXUI_DEMO_SURFACE_TITLE );
+    for ( const char* locale : locales ) {
+        vxui__locale_render_command_deck_title( utest_fixture, locale );
+
+        vxui_rect surface = {};
+        vxui_rect hero = {};
+        vxui_rect action_band = {};
+        ASSERT_TRUE( vxui__locale_find_element_bounds( "title.surface", &surface ) );
+        ASSERT_TRUE( vxui__locale_find_element_bounds( "title.hero", &hero ) );
+        ASSERT_TRUE( vxui__locale_find_element_bounds( "title.action_band", &action_band ) );
+
+        EXPECT_GE( surface.w, contract.desktop_min_surface_width );
+        EXPECT_LT( hero.y + hero.h, action_band.y );
+        EXPECT_LE( action_band.y + action_band.h, surface.y + surface.h + 1.0f );
+    }
+}
+
+UTEST_F( locale_fixture, command_deck_main_menu_uses_split_desktop_surface )
+{
+    const char* locales[] = { "en", "ja-JP", "ar" };
+    const vxui_demo_surface_contract contract = vxui_demo_get_surface_contract( VXUI_DEMO_SURFACE_MAIN_MENU );
+    for ( const char* locale : locales ) {
+        vxui__locale_render_command_deck_main_menu( utest_fixture, locale );
+
+        vxui_rect surface = {};
+        vxui_rect hero = {};
+        vxui_rect deck = {};
+        vxui_rect command_panel = {};
+        vxui_rect preview_panel = {};
+        vxui_rect footer = {};
+        ASSERT_TRUE( vxui__locale_find_element_bounds( "main.surface", &surface ) );
+        ASSERT_TRUE( vxui__locale_find_element_bounds( "main.hero", &hero ) );
+        ASSERT_TRUE( vxui__locale_find_element_bounds( "main.deck", &deck ) );
+        ASSERT_TRUE( vxui__locale_find_element_bounds( "main.command_panel", &command_panel ) );
+        ASSERT_TRUE( vxui__locale_find_element_bounds( "main.preview_panel", &preview_panel ) );
+        ASSERT_TRUE( vxui__locale_find_element_bounds( "main.footer", &footer ) );
+
+        EXPECT_GE( surface.w, contract.desktop_min_surface_width );
+        EXPECT_GE( command_panel.w, 280.0f );
+        EXPECT_GE( preview_panel.w, command_panel.w * 0.80f );
+        EXPECT_LT( hero.y + hero.h, deck.y );
+        EXPECT_LT( deck.y + deck.h, footer.y );
+    }
+}
+
+UTEST_F( locale_fixture, command_deck_settings_menu_keeps_single_scroll_owner_and_pinned_footer )
+{
+    const char* locales[] = { "en", "ja-JP", "ar" };
+    const vxui_demo_surface_contract contract = vxui_demo_get_surface_contract( VXUI_DEMO_SURFACE_SETTINGS );
+    for ( const char* locale : locales ) {
+        vxui__locale_render_command_deck_settings_menu( utest_fixture, locale );
+
+        vxui_rect surface = {};
+        vxui_rect body_panel = {};
+        vxui_rect footer = {};
+        vxui_rect menu_viewport = {};
+        vxui_rect menu_content = {};
+        ASSERT_TRUE( vxui__locale_find_element_bounds( "settings.surface", &surface ) );
+        ASSERT_TRUE( vxui__locale_find_element_bounds( "settings.body_panel", &body_panel ) );
+        ASSERT_TRUE( vxui__locale_find_element_bounds( "settings.footer", &footer ) );
+        ASSERT_TRUE( vxui__locale_find_menu_scope_bounds( "settings.body_menu", 1, &menu_viewport ) );
+        ASSERT_TRUE( vxui__locale_find_menu_scope_bounds( "settings.body_menu", 2, &menu_content ) );
+
+        EXPECT_GE( surface.w, contract.desktop_min_surface_width );
+        EXPECT_GE( menu_viewport.w, surface.w * 0.60f );
+        EXPECT_GT( menu_content.h, menu_viewport.h );
+        EXPECT_GE( menu_viewport.y, body_panel.y - 1.0f );
+        EXPECT_LE( menu_viewport.y + menu_viewport.h, body_panel.y + body_panel.h + 1.0f );
+        EXPECT_LT( body_panel.y + body_panel.h, footer.y );
+        EXPECT_LE( footer.y + footer.h, surface.y + surface.h + 1.0f );
+    }
+}
+
+UTEST_F( locale_fixture, command_deck_sortie_surface_uses_three_lane_split )
+{
+    const char* locales[] = { "en", "ja-JP", "ar" };
+    const vxui_demo_surface_contract contract = vxui_demo_get_surface_contract( VXUI_DEMO_SURFACE_SORTIE );
+    for ( const char* locale : locales ) {
+        vxui__locale_render_command_deck_sortie( utest_fixture, locale );
+
+        vxui_rect surface = {};
+        vxui_rect deck = {};
+        vxui_rect menu_panel = {};
+        vxui_rect briefing = {};
+        vxui_rect detail = {};
+        vxui_rect footer = {};
+        ASSERT_TRUE( vxui__locale_find_element_bounds( "sortie.surface", &surface ) );
+        ASSERT_TRUE( vxui__locale_find_element_bounds( "sortie.deck", &deck ) );
+        ASSERT_TRUE( vxui__locale_find_element_bounds( "sortie.menu_panel", &menu_panel ) );
+        ASSERT_TRUE( vxui__locale_find_element_bounds( "sortie.briefing", &briefing ) );
+        ASSERT_TRUE( vxui__locale_find_element_bounds( "sortie.detail", &detail ) );
+        ASSERT_TRUE( vxui__locale_find_element_bounds( "sortie.footer", &footer ) );
+
+        EXPECT_GE( surface.w, contract.desktop_min_surface_width );
+        EXPECT_GE( menu_panel.w, 300.0f );
+        EXPECT_GE( briefing.w, 320.0f );
+        EXPECT_GE( detail.w, 220.0f );
+        EXPECT_GT( briefing.w, detail.w );
+        EXPECT_LT( deck.y + deck.h, footer.y );
     }
 }

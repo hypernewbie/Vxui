@@ -93,6 +93,7 @@ if(VXUI_BUILD_TESTS)
         tests/test_motion.cpp
         tests/test_navigation.cpp
         tests/test_menu_layer.cpp
+        tests/test_demo_layout.cpp
         tests/test_locale.cpp
         tests/test_screen_stack.cpp
         tests/test_traits.cpp
@@ -100,6 +101,7 @@ if(VXUI_BUILD_TESTS)
         tests/test_soak.cpp
         tests/test_vefc_integration.cpp
         tests/test_layout_contracts.cpp
+        tests/test_author_stories.cpp
     )
     target_include_directories(vxui_tests PRIVATE
         ${freetype_SOURCE_DIR}/include

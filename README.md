@@ -14,7 +14,7 @@ Your renderer, your main loop.
 
 ## What It Is
 
-VXUI is a retained-animated, immediate-authored game UI layer built as a single-header library in [`vxui.h`](vxui.h).
+VXUI is a retained-animated, immediate-authored game UI layer built as a single-header library in [`vxui.h`](vxui.h), with an optional BR-flavored menu/form helper in [`vxui_menu.h`](vxui_menu.h).
 
 You author UI each frame with Clay-style blocks and VXUI primitives:
 
@@ -119,6 +119,19 @@ Built-in trait ids currently include:
 
 You can also register your own trait callbacks with `vxui_register_trait()`.
 
+### Optional Menu Layer
+
+[`vxui_menu.h`](vxui_menu.h) is a separate single-header extension that sits on top of VXUI without adding a second input or focus model.
+
+It provides:
+
+- public POD state via `vxui_menu_state`
+- public style/config structs for menu rows, sections, badges, and prompt bars
+- immediate row emitters like `vxui_menu_action()`, `vxui_menu_option()`, and `vxui_menu_slider()`
+- BR-inspired preset styles via `vxui_menu_style_br_title()` and `vxui_menu_style_br_panel()`
+- generic form presets via `vxui_menu_style_form()` and `vxui_menu_style_compact()`
+- menu-owned spring scroll state with focused-row auto-scroll
+
 ### Debug Tooling
 
 When built with `VXUI_DEBUG`, VXUI also exposes:
@@ -183,6 +196,9 @@ In one translation unit, define the implementations you need:
 
 #define VXUI_IMPL
 #include "vxui.h"
+
+#define VXUI_MENU_IMPL
+#include "vxui_menu.h"
 ```
 
 Then create a context, hand it fixed memory, and build UI each frame:
@@ -252,6 +268,85 @@ vxui_flush_text( &ctx );
 
 `text_queue` is transient staging data. The draw list is the contract.
 
+### `vxui_menu.h` Quick Examples
+
+A BR-style title menu:
+
+```cpp
+vxui_menu_style title_style = vxui_menu_style_br_title();
+vxui_menu_state title_menu = {};
+
+VXUI( &ctx, "screen.title", {} ) {
+    vxui_menu_begin( &ctx, &title_menu, "title_menu", ( vxui_menu_cfg ) {
+        .style = &title_style,
+        .title_key = "menu.title",
+        .subtitle_key = "menu.subtitle",
+        .viewport_height = 280.0f,
+    } );
+    vxui_menu_action( &ctx, &title_menu, "start", "menu.start", start_game, ( vxui_menu_row_cfg ) { 0 }, ( vxui_action_cfg ) { 0 } );
+    vxui_menu_action( &ctx, &title_menu, "options", "menu.options", open_options, ( vxui_menu_row_cfg ) { 0 }, ( vxui_action_cfg ) { 0 } );
+    vxui_menu_action( &ctx, &title_menu, "quit", "menu.quit", quit_game, ( vxui_menu_row_cfg ) { 0 }, ( vxui_action_cfg ) { 0 } );
+    vxui_menu_end( &ctx, &title_menu );
+}
+```
+
+A settings form:
+
+```cpp
+vxui_menu_style form_style = vxui_menu_style_form();
+vxui_menu_state settings_menu = {};
+
+VXUI( &ctx, "screen.settings", {} ) {
+    vxui_menu_begin( &ctx, &settings_menu, "settings_menu", ( vxui_menu_cfg ) {
+        .style = &form_style,
+        .title_key = "settings.title",
+        .viewport_height = 320.0f,
+    } );
+    vxui_menu_section( &ctx, &settings_menu, "audio", "settings.audio", ( vxui_menu_section_cfg ) { 0 } );
+    vxui_menu_option( &ctx, &settings_menu, "difficulty", "settings.difficulty", &difficulty, difficulty_keys, difficulty_count, ( vxui_menu_row_cfg ) {
+        .secondary_key = "settings.difficulty.help",
+    }, ( vxui_option_cfg ) {
+        .wrap = true,
+    } );
+    vxui_menu_slider( &ctx, &settings_menu, "volume", "settings.volume", &volume, 0.0f, 1.0f, ( vxui_menu_row_cfg ) {
+        .badge_text_key = "settings.badge.live",
+    }, ( vxui_slider_cfg ) {
+        .step = 0.05f,
+        .format = "%.2f",
+    } );
+    vxui_menu_end( &ctx, &settings_menu );
+}
+```
+
+A compact pause menu with prompts:
+
+```cpp
+vxui_menu_style compact_style = vxui_menu_style_compact();
+vxui_menu_state pause_menu = {};
+const char* pause_prompt_actions[] = { "action.confirm", "action.cancel" };
+const char* pause_prompt_labels[] = { "prompt.resume", "prompt.back" };
+vxui_menu_prompt_bar_cfg pause_prompts = {
+    .action_names = pause_prompt_actions,
+    .label_keys = pause_prompt_labels,
+    .count = 2,
+};
+
+VXUI( &ctx, "screen.pause", {} ) {
+    vxui_menu_begin( &ctx, &pause_menu, "pause_menu", ( vxui_menu_cfg ) {
+        .style = &compact_style,
+        .viewport_height = 220.0f,
+    } );
+    vxui_menu_action( &ctx, &pause_menu, "resume", "pause.resume", resume_game, ( vxui_menu_row_cfg ) { 0 }, ( vxui_action_cfg ) { 0 } );
+    vxui_menu_action( &ctx, &pause_menu, "quit", "pause.quit", quit_to_title, ( vxui_menu_row_cfg ) {
+        .disabled = !can_quit_now,
+    }, ( vxui_action_cfg ) { 0 } );
+    vxui_menu_prompt_bar( &ctx, &pause_menu, "pause_prompts", &pause_prompts );
+    vxui_menu_end( &ctx, &pause_menu );
+}
+```
+
+The existing demo remains unchanged. A dedicated BR-flavored demo can now be built as a follow-up on top of the extension.
+
 ## Public API Surface
 
 The main public groups in [`vxui.h`](vxui.h) are:
@@ -260,14 +355,17 @@ The main public groups in [`vxui.h`](vxui.h) are:
 - services: `vxui_set_fontcache`, `vxui_set_text_fn`
 - input/navigation: `vxui_input_nav`, `vxui_input_confirm`, `vxui_input_cancel`, `vxui_input_tab`, `vxui_focused_id`, `vxui_set_focus`
 - locale/prompt setup: `vxui_set_input_table`, `vxui_set_locale`, `vxui_set_locale_font`
+- bounds lookup: `vxui_find_anim_bounds`
 - screens/sequences: `vxui_push_screen`, `vxui_pop_screen`, `vxui_replace_screen`, `vxui_register_seq`, `vxui_fire_seq`, `vxui_stop_seq`, `vxui_seq_playing`, `vxui_find_seq`, `vxui_load_seq_toml`
 - tooling: `vxui_generate_seq_c`, `vxui_generate_seq_toml`
 - traits: `vxui_register_trait`, `VXUI_TRAIT`
 - primitives: `VXUI_LABEL`, `VXUI_VALUE`, `VXUI_ACTION`, `VXUI_OPTION`, `VXUI_SLIDER`, `VXUI_PROMPT`
+- menu extension: `vxui_menu_begin`, `vxui_menu_end`, `vxui_menu_section`, `vxui_menu_label`, `vxui_menu_action`, `vxui_menu_option`, `vxui_menu_slider`, `vxui_menu_badge`, `vxui_menu_prompt_bar`
 
 ## Repo Layout
 
 - [`vxui.h`](vxui.h): the library
+- [`vxui_menu.h`](vxui_menu.h): optional menu/form extension
 - [`main.cpp`](main.cpp): Windows TinyWindow/OpenGL demo
 - [`tests/`](tests): `utest.h`-based unit, integration, and soak coverage
 - [`third_party/utest.h`](third_party/utest.h): test framework

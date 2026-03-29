@@ -92,6 +92,7 @@ if(VXUI_BUILD_TESTS)
         tests/test_primitives_advanced.cpp
         tests/test_motion.cpp
         tests/test_navigation.cpp
+        tests/test_menu_layer.cpp
         tests/test_locale.cpp
         tests/test_screen_stack.cpp
         tests/test_traits.cpp

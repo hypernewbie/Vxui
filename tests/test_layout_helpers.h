@@ -135,20 +135,7 @@ inline bool vxui_layout_helpers::find_border_near( const vxui_draw_list* list, f
 
 inline bool vxui_layout_helpers::find_anim_bounds( const vxui_ctx* ctx, uint32_t id, vxui_rect* out )
 {
-    if ( !ctx || !ctx->anim_slots || ctx->anim_capacity <= 0 ) {
-        return false;
-    }
-    for ( int i = 0; i < ctx->anim_capacity; ++i ) {
-        const vxui_anim_slot* slot = &ctx->anim_slots[ i ];
-        if ( !slot->occupied || slot->state.id != id ) {
-            continue;
-        }
-        if ( out ) {
-            *out = slot->state.bounds;
-        }
-        return true;
-    }
-    return false;
+    return vxui_find_anim_bounds( ctx, id, out );
 }
 
 inline vxui_rect vxui_layout_helpers::compute_union_rect( const vxui_draw_list* list, int start_idx, int count )

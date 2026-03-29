@@ -739,6 +739,7 @@ void VXUI_PROMPT( vxui_ctx* ctx, const char* action_name );
 /* Id helpers. */
 uint32_t vxui_id( const char* label );
 uint32_t vxui_idi( const char* label, int index );
+bool vxui_find_anim_bounds( const vxui_ctx* ctx, uint32_t id, vxui_rect* out );
 
 #define VXUI( ctx, id_str, ... ) \
     for ( uint32_t _vxui_prev_decl_id = ( ctx )->current_decl_id, _vxui_once = ( ( ctx )->current_decl_id = vxui_id( id_str ), 1u ); \
@@ -4614,6 +4615,26 @@ uint32_t vxui_idi( const char* label, int index )
 {
     Clay_ElementId id = Clay_GetElementIdWithIndex( vxui__clay_string_from_cstr( label ), ( uint32_t ) index );
     return id.id;
+}
+
+bool vxui_find_anim_bounds( const vxui_ctx* ctx, uint32_t id, vxui_rect* out )
+{
+    if ( !ctx || !ctx->anim_slots || ctx->anim_capacity <= 0 ) {
+        return false;
+    }
+
+    for ( int i = 0; i < ctx->anim_capacity; ++i ) {
+        const vxui_anim_slot* slot = &ctx->anim_slots[ i ];
+        if ( !slot->occupied || slot->state.id != id ) {
+            continue;
+        }
+        if ( out ) {
+            *out = slot->state.bounds;
+        }
+        return true;
+    }
+
+    return false;
 }
 
 #endif // VXUI_IMPL

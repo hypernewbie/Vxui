@@ -8,7 +8,9 @@
 
 #define VE_FONTCACHE_IMPL
 #define VXUI_IMPL
+#define VXUI_MENU_IMPL
 #include "../vxui.h"
+#include "../vxui_menu.h"
 
 #include "test_support.h"
 

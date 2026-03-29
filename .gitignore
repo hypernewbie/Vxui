@@ -22,3 +22,5 @@ Testing/
 vxui_design.md
 temp/
 tmp/
+.claude/
+TEMP*.md

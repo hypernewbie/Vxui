@@ -115,6 +115,45 @@ UTEST( ids, match_clay_indexed )
     EXPECT_EQ( a, b );
 }
 
+UTEST( core, find_anim_bounds_returns_live_decl_bounds )
+{
+    std::vector< uint8_t > memory( ( size_t ) vxui_min_memory_size() );
+    vxui_ctx ctx = {};
+    float value = 0.5f;
+
+    vxui_init( &ctx, vxui_create_arena( ( uint64_t ) memory.size(), memory.data() ), vxui__test_config() );
+    vxui_begin( &ctx, 0.016f );
+    VXUI( &ctx, "root", {
+        .layout = {
+            .padding = CLAY_PADDING_ALL( 24 ),
+        },
+    } ) {
+        VXUI_SLIDER( &ctx, "volume", &value, 0.0f, 1.0f, ( vxui_slider_cfg ) { 0 } );
+    }
+    ( void ) vxui_end( &ctx );
+
+    vxui_rect bounds = {};
+    ASSERT_TRUE( vxui_find_anim_bounds( &ctx, vxui_id( "volume" ), &bounds ) );
+    EXPECT_GT( bounds.w, 0.0f );
+    EXPECT_GT( bounds.h, 0.0f );
+
+    vxui_shutdown( &ctx );
+}
+
+UTEST( core, find_anim_bounds_rejects_missing_and_null_inputs )
+{
+    vxui_rect bounds = {};
+    EXPECT_FALSE( vxui_find_anim_bounds( nullptr, 1u, &bounds ) );
+
+    std::vector< uint8_t > memory( 4096 );
+    vxui_ctx ctx = {};
+    vxui_init( &ctx, vxui_create_arena( ( uint64_t ) memory.size(), memory.data() ), vxui__test_config() );
+
+    EXPECT_FALSE( vxui_find_anim_bounds( &ctx, vxui_id( "missing" ), &bounds ) );
+
+    vxui_shutdown( &ctx );
+}
+
 UTEST( core, allocations_are_aligned_from_misaligned_base )
 {
     std::vector< uint8_t > memory( 4097 );

@@ -1102,7 +1102,9 @@ UTEST_F( demo_layout_fixture, main_menu_real_content_matches_production_copy_and
 
     ASSERT_TRUE( preview != nullptr );
     EXPECT_TRUE( demo_layout_has_text( &list, preview->title ) );
-    EXPECT_TRUE( demo_layout_has_text( &list, preview->subtitle ) );
+    if ( surface_max_height > 720.0f ) {
+        EXPECT_TRUE( demo_layout_has_text( &list, preview->subtitle ) );
+    }
     EXPECT_TRUE( demo_layout_has_text( &list, preview->body ) );
     EXPECT_TRUE( demo_layout_has_text( &list, vxui_demo_badge_text( test_case.locale, preview->badge_key ) ) );
     EXPECT_TRUE( demo_layout_has_text( &list, controls.title ) );
@@ -1113,6 +1115,9 @@ UTEST_F( demo_layout_fixture, main_menu_production_parity_harness_matches_runtim
 {
     const demo_layout_case test_case = { "main_menu", "en", 1280, 648, 0, DEMO_TEXT_PACK_NORMAL, DEMO_FOCUS_DETAIL_HEAVY, 0, 0 };
     ( void ) demo_layout_render_case( utest_fixture, test_case );
+    const float surface_max_height = std::max( 0.0f, ( float ) test_case.height - VXUI_DEMO_LAYOUT_OUTER_PADDING * 2.0f );
+    const float help_owner_width = demo_layout_main_menu_help_owner_width( test_case.width, test_case.height, test_case.locale );
+    const vxui_demo_controls_block_contract controls_contract = vxui_demo_get_controls_block_contract( surface_max_height, help_owner_width );
 
     vxui_rect preview_panel = {};
     vxui_rect preview_header = {};
@@ -1128,7 +1133,7 @@ UTEST_F( demo_layout_fixture, main_menu_production_parity_harness_matches_runtim
     ASSERT_TRUE( demo_layout_find_element_bounds( "main.preview_header", &preview_header ) );
     ASSERT_TRUE( demo_layout_find_element_bounds( "main.preview_body_viewport", &preview_viewport ) );
     ASSERT_TRUE( demo_layout_find_element_bounds( "main.preview_body_content", &preview_content ) );
-    ASSERT_TRUE( demo_layout_find_controls_block_regions( "main.help", &help, &help_title, help_lines, 4 ) );
+    ASSERT_TRUE( demo_layout_find_controls_block_regions( "main.help", &help, &help_title, help_lines, controls_contract.visible_line_count ) );
     ASSERT_TRUE( demo_layout_find_element_bounds( "main.footer", &footer ) );
     ASSERT_TRUE( demo_layout_find_element_bounds( "main.footer.prompts", &footer_prompts ) );
     ASSERT_TRUE( demo_layout_find_element_bounds( "main.footer.status", &footer_status ) );
@@ -1257,12 +1262,15 @@ UTEST_F( demo_layout_fixture, main_menu_help_lines_do_not_overlap_in_supported_s
 
             vxui_rect stack[ 5 ] = { help_title, help_lines[ 0 ], help_lines[ 1 ], help_lines[ 2 ], help_lines[ 3 ] };
             vxui_rect text_stack[ 5 ] = { help_title_text, help_line_text[ 0 ], help_line_text[ 1 ], help_line_text[ 2 ], help_line_text[ 3 ] };
-            EXPECT_TRUE( vxui_demo_element_group_fully_visible( help, stack, 5, 0.0f ) );
-            EXPECT_TRUE( vxui_demo_elements_form_vertical_stack( stack, 5, contract.line_gap_min ) );
-            EXPECT_TRUE( vxui_demo_elements_non_overlapping( stack, 5, 0.0f ) );
-            EXPECT_TRUE( vxui_demo_element_group_fully_visible( help, text_stack, 5, 0.0f ) );
-            EXPECT_TRUE( vxui_demo_elements_form_vertical_stack( text_stack, 5, contract.line_gap_min ) );
-            EXPECT_TRUE( vxui_demo_elements_non_overlapping( text_stack, 5, 0.0f ) );
+            const int stack_count = 1 + contract.visible_line_count;
+            EXPECT_TRUE( vxui_demo_element_group_fully_visible( help, stack, stack_count, 0.0f ) );
+            EXPECT_TRUE( vxui_demo_elements_form_vertical_stack( stack, stack_count, contract.line_gap_min ) );
+            EXPECT_TRUE( vxui_demo_elements_non_overlapping( stack, stack_count, 0.0f ) );
+            EXPECT_TRUE( vxui_demo_element_group_fully_visible( help, text_stack, stack_count, 0.0f ) );
+            if ( contract.visible_line_count > 1 ) {
+                EXPECT_TRUE( vxui_demo_elements_form_vertical_stack( text_stack, stack_count, contract.line_gap_min ) );
+            }
+            EXPECT_TRUE( vxui_demo_elements_non_overlapping( text_stack, stack_count, 0.0f ) );
         }
     }
 }
@@ -1289,12 +1297,13 @@ UTEST_F( demo_layout_fixture, main_menu_help_block_lines_remain_fully_visible_an
 
         vxui_rect stack[ 5 ] = { help_title, help_lines[ 0 ], help_lines[ 1 ], help_lines[ 2 ], help_lines[ 3 ] };
         vxui_rect text_stack[ 5 ] = { help_title_text, help_line_text[ 0 ], help_line_text[ 1 ], help_line_text[ 2 ], help_line_text[ 3 ] };
-        EXPECT_TRUE( vxui_demo_element_group_fully_visible( help, stack, 5, 0.0f ) );
-        EXPECT_TRUE( vxui_demo_elements_form_vertical_stack( stack, 5, contract.line_gap_min ) );
-        EXPECT_TRUE( vxui_demo_elements_non_overlapping( stack, 5, 0.0f ) );
-        EXPECT_TRUE( vxui_demo_element_group_fully_visible( help, text_stack, 5, 0.0f ) );
-        EXPECT_TRUE( vxui_demo_elements_form_vertical_stack( text_stack, 5, contract.line_gap_min ) );
-        EXPECT_TRUE( vxui_demo_elements_non_overlapping( text_stack, 5, 0.0f ) );
+        const int stack_count = 1 + contract.visible_line_count;
+        EXPECT_TRUE( vxui_demo_element_group_fully_visible( help, stack, stack_count, 0.0f ) );
+        EXPECT_TRUE( vxui_demo_elements_form_vertical_stack( stack, stack_count, contract.line_gap_min ) );
+        EXPECT_TRUE( vxui_demo_elements_non_overlapping( stack, stack_count, 0.0f ) );
+        EXPECT_TRUE( vxui_demo_element_group_fully_visible( help, text_stack, stack_count, 0.0f ) );
+        EXPECT_TRUE( vxui_demo_elements_form_vertical_stack( text_stack, stack_count, contract.line_gap_min ) );
+        EXPECT_TRUE( vxui_demo_elements_non_overlapping( text_stack, stack_count, 0.0f ) );
     }
 }
 

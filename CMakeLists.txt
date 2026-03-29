@@ -108,7 +108,7 @@ if(VXUI_BUILD_TESTS)
         ${freetype_SOURCE_DIR}/include
         ${harfbuzz_SOURCE_DIR}/src
     )
-    target_link_libraries(vxui_tests PRIVATE vxui tomlc99 freetype harfbuzz)
+    target_link_libraries(vxui_tests PRIVATE vxui tomlc99 freetype harfbuzz ole32 windowscodecs)
     target_compile_definitions(vxui_tests PRIVATE
         VE_FONTCACHE_FREETYPE_RASTERISATION
         VE_FONTCACHE_HARFBUZZ

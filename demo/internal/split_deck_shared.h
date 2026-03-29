@@ -258,13 +258,13 @@ inline void vxui_demo_shared_emit_footer_action_bar( vxui_ctx* ctx, const char* 
     CLAY( vxui_demo_split_deck_hashed_id( vxui_id( id ) ), {
         .layout = {
             .sizing = { CLAY_SIZING_GROW( 0 ), CLAY_SIZING_FIT( 0 ) },
-            .padding = CLAY_PADDING_ALL( 10 ),
-            .childGap = ( uint16_t ) VXUI_DEMO_LAYOUT_ROW_GAP,
+            .padding = CLAY_PADDING_ALL( 6 ),
+            .childGap = 6,
             .childAlignment = { .y = CLAY_ALIGN_Y_CENTER },
             .layoutDirection = CLAY_LEFT_TO_RIGHT,
         },
         .backgroundColor = vxui_demo_clay_color( theme.action_fill ),
-        .cornerRadius = CLAY_CORNER_RADIUS( 10 ),
+        .cornerRadius = CLAY_CORNER_RADIUS( 8 ),
         .border = vxui_demo_panel_border( theme.action_border, 1 ),
     } ) {
         emit_children();
@@ -274,10 +274,9 @@ inline void vxui_demo_shared_emit_footer_action_bar( vxui_ctx* ctx, const char* 
 inline void vxui_demo_shared_emit_status_summary( vxui_ctx* ctx, const char* id, const vxui_demo_status_summary_cfg& status, bool rtl, uint32_t body_font_id )
 {
     const vxui_demo_command_deck_theme& theme = vxui_demo_command_deck_theme_tokens();
-    const vxui_label_cfg meta_cfg = vxui_demo_text_style( body_font_id, 16.0f, theme.muted_text );
-    const vxui_value_cfg value_cfg = vxui_demo_value_style( body_font_id, 16.0f, theme.muted_text, "%.0f" );
+    const vxui_label_cfg meta_cfg = vxui_demo_text_style( body_font_id, 13.0f, theme.muted_text );
+    const vxui_value_cfg value_cfg = vxui_demo_value_style( body_font_id, 13.0f, theme.muted_text, "%.0f" );
     const std::string primary_id = std::string( id ) + ".row.primary";
-    const std::string secondary_id = std::string( id ) + ".row.secondary";
     const std::string locale_id = std::string( id ) + ".locale";
     const std::string prompts_id = std::string( id ) + ".prompts";
     const std::string screens_id = std::string( id ) + ".screens";
@@ -285,31 +284,23 @@ inline void vxui_demo_shared_emit_status_summary( vxui_ctx* ctx, const char* id,
     CLAY( vxui_demo_split_deck_hashed_id( vxui_id( id ) ), {
         .layout = {
             .sizing = { CLAY_SIZING_GROW( 0 ), CLAY_SIZING_FIT( 0 ) },
-            .padding = CLAY_PADDING_ALL( 10 ),
-            .childGap = ( uint16_t ) VXUI_DEMO_LAYOUT_ROW_GAP,
-            .layoutDirection = CLAY_TOP_TO_BOTTOM,
+            .padding = CLAY_PADDING_ALL( 6 ),
+            .childGap = 6,
+            .layoutDirection = CLAY_LEFT_TO_RIGHT,
         },
         .backgroundColor = vxui_demo_clay_color( theme.secondary_panel_fill ),
-        .cornerRadius = CLAY_CORNER_RADIUS( 10 ),
+        .cornerRadius = CLAY_CORNER_RADIUS( 8 ),
     } ) {
         CLAY( vxui_demo_split_deck_hashed_id( vxui_id( primary_id.c_str() ) ), {
             .layout = {
                 .sizing = { CLAY_SIZING_GROW( 0 ), CLAY_SIZING_FIT( 0 ) },
-                .childGap = ( uint16_t ) VXUI_DEMO_LAYOUT_ROW_GAP,
+                .childGap = 6,
+                .childAlignment = { .y = CLAY_ALIGN_Y_CENTER },
                 .layoutDirection = CLAY_LEFT_TO_RIGHT,
             },
         } ) {
             vxui_demo_shared_emit_compact_meta_row( ctx, locale_id.c_str(), "status.label.locale", status.locale_name_key, rtl, &meta_cfg );
             vxui_demo_shared_emit_compact_meta_row( ctx, prompts_id.c_str(), "status.label.prompts", status.prompt_name_key, rtl, &meta_cfg );
-        }
-
-        CLAY( vxui_demo_split_deck_hashed_id( vxui_id( secondary_id.c_str() ) ), {
-            .layout = {
-                .sizing = { CLAY_SIZING_GROW( 0 ), CLAY_SIZING_FIT( 0 ) },
-                .childGap = ( uint16_t ) VXUI_DEMO_LAYOUT_ROW_GAP,
-                .layoutDirection = CLAY_LEFT_TO_RIGHT,
-            },
-        } ) {
             CLAY( vxui_demo_split_deck_hashed_id( vxui_id( screens_id.c_str() ) ), {
                 .layout = {
                     .sizing = { CLAY_SIZING_FIT( 0 ), CLAY_SIZING_FIT( 0 ) },
@@ -378,14 +369,14 @@ inline vxui_menu_style vxui_demo_shared_menu_style_form_deck( const vxui_demo_sp
     style.title_font_id = visuals.section_font_id;
     style.badge_font_id = visuals.body_font_id;
     style.label_lane_width = label_lane_width;
-    style.body_font_size = 22.0f;
-    style.secondary_font_size = 18.0f;
-    style.title_font_size = 28.0f;
-    style.row_height = 48.0f;
-    style.row_gap = 8.0f;
-    style.section_gap = 14.0f;
-    style.padding_x = 18.0f;
-    style.padding_y = 16.0f;
+    style.body_font_size = 18.0f;
+    style.secondary_font_size = 15.0f;
+    style.title_font_size = 24.0f;
+    style.row_height = 40.0f;
+    style.row_gap = 4.0f;
+    style.section_gap = 10.0f;
+    style.padding_x = 14.0f;
+    style.padding_y = 10.0f;
     vxui_demo_apply_form_menu_theme( style );
     return style;
 }
@@ -432,11 +423,11 @@ inline void vxui_demo_shared_emit_screen_header( vxui_ctx* ctx, const char* id, 
     CLAY( vxui_demo_split_deck_hashed_id( vxui_id( id ) ), {
         .layout = {
             .sizing = { CLAY_SIZING_GROW( 0 ), CLAY_SIZING_FIT( 0 ) },
-            .padding = CLAY_PADDING_ALL( 18 ),
+            .padding = CLAY_PADDING_ALL( 12 ),
             .layoutDirection = CLAY_TOP_TO_BOTTOM,
         },
         .backgroundColor = vxui_demo_clay_color( theme.hero_surface_fill ),
-        .cornerRadius = CLAY_CORNER_RADIUS( 14 ),
+        .cornerRadius = CLAY_CORNER_RADIUS( 12 ),
         .border = vxui_demo_panel_border( theme.hero_surface_border, 1 ),
     } ) {
         VXUI_LABEL( ctx, title_key, vxui_demo_text_style( visuals.title_font_id, title_size, theme.title_text ) );
@@ -475,14 +466,14 @@ inline void vxui_demo_render_sortie_screen_shared( vxui_ctx* ctx, const vxui_dem
     const vxui_demo_split_deck_layout_spec layout =
         vxui_demo_resolve_split_deck_layout( VXUI_DEMO_SURFACE_SORTIE, viewport_width, layout_surface_max_height, ctx->locale );
     vxui_menu_style form_style = vxui_demo_shared_menu_style_form_deck( visuals, 110.0f );
-    form_style.body_font_size = 20.0f;
-    form_style.secondary_font_size = 16.0f;
-    form_style.badge_font_size = 14.0f;
-    form_style.row_height = 44.0f;
-    form_style.row_gap = 6.0f;
+    form_style.body_font_size = 18.0f;
+    form_style.secondary_font_size = 14.0f;
+    form_style.badge_font_size = 12.0f;
+    form_style.row_height = 40.0f;
+    form_style.row_gap = 4.0f;
 
     vxui_demo_shared_emit_screen_surface( ctx, "sortie", "sortie.surface", layout.surface.surface_width, layout.surface_max_height, rtl, cfg.background_scanline, [&]() {
-        vxui_demo_shared_emit_screen_header( ctx, "sortie.header", "menu.sortie", visuals, 48.0f );
+        vxui_demo_shared_emit_screen_header( ctx, "sortie.header", "menu.sortie", visuals, 40.0f );
 
         VXUI( ctx, "sortie.deck", {
             .layout = {
@@ -520,16 +511,16 @@ inline void vxui_demo_render_sortie_screen_shared( vxui_ctx* ctx, const vxui_dem
             VXUI( ctx, "sortie.briefing", {
                 .layout = {
                     .sizing = { CLAY_SIZING_FIXED( layout.secondary_lane_width ), CLAY_SIZING_GROW( 0 ) },
-                    .padding = CLAY_PADDING_ALL( 20 ),
-                    .childGap = 12,
+                    .padding = CLAY_PADDING_ALL( 16 ),
+                    .childGap = 8,
                     .layoutDirection = CLAY_TOP_TO_BOTTOM,
                 },
                 .backgroundColor = vxui_demo_clay_color( theme.secondary_panel_fill ),
                 .cornerRadius = CLAY_CORNER_RADIUS( 12 ),
                 .border = vxui_demo_panel_border( theme.secondary_panel_border, 1 ),
             } ) {
-                VXUI_LABEL( ctx, mission.name, vxui_demo_text_style( visuals.title_font_id, 40.0f, theme.title_text ) );
-                VXUI_LABEL( ctx, mission.region, vxui_demo_text_style( visuals.section_font_id, 24.0f, theme.accent_cool ) );
+                VXUI_LABEL( ctx, mission.name, vxui_demo_text_style( visuals.title_font_id, 34.0f, theme.title_text ) );
+                VXUI_LABEL( ctx, mission.region, vxui_demo_text_style( visuals.section_font_id, 20.0f, theme.accent_cool ) );
                 CLAY( vxui_demo_split_deck_hashed_id( vxui_id( "sortie.briefing.body_viewport" ) ), {
                     .layout = {
                         .sizing = { CLAY_SIZING_GROW( 0 ), CLAY_SIZING_GROW( 160.0f ) },
@@ -543,13 +534,13 @@ inline void vxui_demo_render_sortie_screen_shared( vxui_ctx* ctx, const vxui_dem
                     VXUI( ctx, "sortie.briefing.body", {
                         .layout = {
                             .sizing = { CLAY_SIZING_GROW( 0 ), CLAY_SIZING_FIT( 0 ) },
-                            .padding = { 0, 0, 0, 12 },
-                            .childGap = 12,
+                            .padding = { 0, 0, 0, 8 },
+                            .childGap = 8,
                             .layoutDirection = CLAY_TOP_TO_BOTTOM,
                         },
                     } ) {
-                        VXUI_LABEL( ctx, mission.briefing, vxui_demo_text_style( visuals.body_font_id, 20.0f, theme.body_text ) );
-                        VXUI_LABEL( ctx, mission.warning, vxui_demo_text_style( visuals.body_font_id, 17.0f, theme.warning_text ) );
+                        VXUI_LABEL( ctx, mission.briefing, vxui_demo_text_style( visuals.body_font_id, 17.0f, theme.body_text ) );
+                        VXUI_LABEL( ctx, mission.warning, vxui_demo_text_style( visuals.body_font_id, 15.0f, theme.warning_text ) );
                     }
                 }
             }
@@ -557,33 +548,34 @@ inline void vxui_demo_render_sortie_screen_shared( vxui_ctx* ctx, const vxui_dem
             VXUI( ctx, "sortie.detail", {
                 .layout = {
                     .sizing = { CLAY_SIZING_FIXED( layout.tertiary_lane_width ), CLAY_SIZING_GROW( 0 ) },
-                    .padding = CLAY_PADDING_ALL( 18 ),
-                    .childGap = 10,
+                    .padding = CLAY_PADDING_ALL( 14 ),
+                    .childGap = 8,
                     .layoutDirection = CLAY_TOP_TO_BOTTOM,
                 },
                 .backgroundColor = vxui_demo_clay_color( theme.secondary_panel_fill ),
                 .cornerRadius = CLAY_CORNER_RADIUS( 12 ),
                 .border = vxui_demo_panel_border( theme.secondary_panel_border, 1 ),
             } ) {
-                VXUI_LABEL( ctx, mission.threat, vxui_demo_text_style( visuals.section_font_id, 24.0f, theme.section_text ) );
-                VXUI_LABEL( ctx, mission.reward, vxui_demo_text_style( visuals.body_font_id, 20.0f, theme.body_text ) );
-                VXUI_LABEL( ctx, "Challenge window stable", vxui_demo_text_style( visuals.body_font_id, 17.0f, theme.success_text ) );
+                VXUI_LABEL( ctx, mission.threat, vxui_demo_text_style( visuals.section_font_id, 20.0f, theme.section_text ) );
+                VXUI_LABEL( ctx, mission.reward, vxui_demo_text_style( visuals.body_font_id, 16.0f, theme.body_text ) );
+                VXUI_LABEL( ctx, "Challenge window stable", vxui_demo_text_style( visuals.body_font_id, 15.0f, theme.success_text ) );
             }
         }
 
         VXUI( ctx, "sortie.footer", {
             .layout = {
                 .sizing = { CLAY_SIZING_GROW( 0 ), CLAY_SIZING_FIT( 0 ) },
-                .padding = CLAY_PADDING_ALL( 18 ),
-                .childGap = ( uint16_t ) VXUI_DEMO_LAYOUT_ROW_GAP,
-                .layoutDirection = CLAY_TOP_TO_BOTTOM,
+                .padding = CLAY_PADDING_ALL( 8 ),
+                .childGap = 6,
+                .childAlignment = { .y = CLAY_ALIGN_Y_CENTER },
+                .layoutDirection = CLAY_LEFT_TO_RIGHT,
             },
             .backgroundColor = vxui_demo_clay_color( theme.utility_fill ),
             .cornerRadius = CLAY_CORNER_RADIUS( 12 ),
             .border = vxui_demo_panel_border( theme.utility_border, 1 ),
         } ) {
             vxui_demo_shared_emit_footer_action_bar( ctx, "sortie.footer.prompts", rtl, [&]() {
-                const vxui_label_cfg prompt_cfg = vxui_demo_text_style( visuals.body_font_id, 18.0f, theme.utility_text );
+                const vxui_label_cfg prompt_cfg = vxui_demo_text_style( visuals.body_font_id, 15.0f, theme.utility_text );
                 vxui_demo_shared_emit_prompt_pair( ctx, "sortie.prompt.confirm", "action.confirm", "menu.confirm", &prompt_cfg );
                 vxui_demo_shared_emit_prompt_pair( ctx, "sortie.prompt.cancel", "action.cancel", "menu.cancel", &prompt_cfg );
             } );
@@ -607,7 +599,7 @@ inline void vxui_demo_render_loadout_screen_shared( vxui_ctx* ctx, const vxui_de
     vxui_menu_style form_style = vxui_demo_shared_menu_style_form_deck( visuals, 136.0f );
 
     vxui_demo_shared_emit_screen_surface( ctx, "loadout", "loadout.surface", layout.surface.surface_width, layout.surface_max_height, rtl, cfg.background_scanline, [&]() {
-        vxui_demo_shared_emit_screen_header( ctx, "loadout.header", "menu.loadout", visuals, 46.0f );
+        vxui_demo_shared_emit_screen_header( ctx, "loadout.header", "menu.loadout", visuals, 38.0f );
 
         VXUI( ctx, "loadout.deck", {
             .layout = {
@@ -659,7 +651,7 @@ inline void vxui_demo_render_loadout_screen_shared( vxui_ctx* ctx, const vxui_de
                     VXUI( ctx, "loadout.detail.body", {
                         .layout = {
                             .sizing = { CLAY_SIZING_GROW( 0 ), CLAY_SIZING_FIT( 0 ) },
-                            .padding = { 0, 0, 0, 12 },
+                            .padding = { 0, 0, 0, 8 },
                             .childGap = ( uint16_t ) VXUI_DEMO_LAYOUT_SECTION_GAP,
                             .layoutDirection = CLAY_TOP_TO_BOTTOM,
                         },
@@ -667,23 +659,23 @@ inline void vxui_demo_render_loadout_screen_shared( vxui_ctx* ctx, const vxui_de
                         VXUI( ctx, "loadout.frame_card", {
                             .layout = {
                                 .sizing = { CLAY_SIZING_GROW( 0 ), CLAY_SIZING_FIT( 0 ) },
-                            .padding = CLAY_PADDING_ALL( 20 ),
-                            .childGap = 10,
+                            .padding = CLAY_PADDING_ALL( 14 ),
+                            .childGap = 8,
                             .layoutDirection = CLAY_TOP_TO_BOTTOM,
                         },
                         .backgroundColor = vxui_demo_clay_color( theme.secondary_panel_fill ),
                         .cornerRadius = CLAY_CORNER_RADIUS( 12 ),
                     } ) {
-                        VXUI_LABEL( ctx, ship.name, vxui_demo_text_style( visuals.title_font_id, 40.0f, theme.title_text ) );
-                        VXUI_LABEL( ctx, ship.class_name, vxui_demo_text_style( visuals.section_font_id, 24.0f, theme.accent_cool ) );
-                        VXUI_LABEL( ctx, ship.summary, vxui_demo_text_style( visuals.body_font_id, 20.0f, theme.body_text ) );
+                        VXUI_LABEL( ctx, ship.name, vxui_demo_text_style( visuals.title_font_id, 34.0f, theme.title_text ) );
+                        VXUI_LABEL( ctx, ship.class_name, vxui_demo_text_style( visuals.section_font_id, 20.0f, theme.accent_cool ) );
+                        VXUI_LABEL( ctx, ship.summary, vxui_demo_text_style( visuals.body_font_id, 17.0f, theme.body_text ) );
                     }
 
                         VXUI( ctx, "loadout.stat_card", {
                             .layout = {
                                 .sizing = { CLAY_SIZING_GROW( 0 ), CLAY_SIZING_FIT( 0 ) },
-                            .padding = CLAY_PADDING_ALL( 18 ),
-                            .childGap = 10,
+                            .padding = CLAY_PADDING_ALL( 14 ),
+                            .childGap = 8,
                             .layoutDirection = CLAY_TOP_TO_BOTTOM,
                         },
                         .backgroundColor = vxui_demo_clay_color( theme.secondary_panel_fill ),
@@ -693,9 +685,9 @@ inline void vxui_demo_render_loadout_screen_shared( vxui_ctx* ctx, const vxui_de
                             vxui_demo_shared_emit_stat_bar( ctx, visuals, "loadout.stat.shield", "Shield", ship.shield );
                             vxui_demo_shared_emit_stat_bar( ctx, visuals, "loadout.stat.output", "Output", ship.output );
                             vxui_demo_shared_emit_stat_bar( ctx, visuals, "loadout.stat.sync", "Sync", ship.sync );
-                            VXUI_LABEL( ctx, VXUI_DEMO_SHARED_PRIMARY_NAMES[ std::clamp( cfg.selected_primary_index ? *cfg.selected_primary_index : 0, 0, 3 ) ], vxui_demo_text_style( visuals.body_font_id, 17.0f, theme.section_text ) );
-                            VXUI_LABEL( ctx, VXUI_DEMO_SHARED_SUPPORT_NAMES[ std::clamp( cfg.selected_support_index ? *cfg.selected_support_index : 0, 0, 3 ) ], vxui_demo_text_style( visuals.body_font_id, 17.0f, theme.body_text ) );
-                            VXUI_LABEL( ctx, VXUI_DEMO_SHARED_SYSTEM_NAMES[ std::clamp( cfg.selected_system_index ? *cfg.selected_system_index : 0, 0, 3 ) ], vxui_demo_text_style( visuals.body_font_id, 17.0f, theme.success_text ) );
+                            VXUI_LABEL( ctx, VXUI_DEMO_SHARED_PRIMARY_NAMES[ std::clamp( cfg.selected_primary_index ? *cfg.selected_primary_index : 0, 0, 3 ) ], vxui_demo_text_style( visuals.body_font_id, 15.0f, theme.section_text ) );
+                            VXUI_LABEL( ctx, VXUI_DEMO_SHARED_SUPPORT_NAMES[ std::clamp( cfg.selected_support_index ? *cfg.selected_support_index : 0, 0, 3 ) ], vxui_demo_text_style( visuals.body_font_id, 15.0f, theme.body_text ) );
+                            VXUI_LABEL( ctx, VXUI_DEMO_SHARED_SYSTEM_NAMES[ std::clamp( cfg.selected_system_index ? *cfg.selected_system_index : 0, 0, 3 ) ], vxui_demo_text_style( visuals.body_font_id, 15.0f, theme.success_text ) );
                         }
                     }
                 }
@@ -705,16 +697,17 @@ inline void vxui_demo_render_loadout_screen_shared( vxui_ctx* ctx, const vxui_de
         VXUI( ctx, "loadout.footer", {
             .layout = {
                 .sizing = { CLAY_SIZING_GROW( 0 ), CLAY_SIZING_FIT( 0 ) },
-                .padding = CLAY_PADDING_ALL( 18 ),
-                .childGap = ( uint16_t ) VXUI_DEMO_LAYOUT_ROW_GAP,
-                .layoutDirection = CLAY_TOP_TO_BOTTOM,
+                .padding = CLAY_PADDING_ALL( 8 ),
+                .childGap = 6,
+                .childAlignment = { .y = CLAY_ALIGN_Y_CENTER },
+                .layoutDirection = CLAY_LEFT_TO_RIGHT,
             },
             .backgroundColor = vxui_demo_clay_color( theme.utility_fill ),
             .cornerRadius = CLAY_CORNER_RADIUS( 12 ),
             .border = vxui_demo_panel_border( theme.utility_border, 1 ),
         } ) {
             vxui_demo_shared_emit_footer_action_bar( ctx, "loadout.footer.prompts", rtl, [&]() {
-                const vxui_label_cfg prompt_cfg = vxui_demo_text_style( visuals.body_font_id, 18.0f, theme.utility_text );
+                const vxui_label_cfg prompt_cfg = vxui_demo_text_style( visuals.body_font_id, 15.0f, theme.utility_text );
                 vxui_demo_shared_emit_prompt_pair( ctx, "loadout.prompt.confirm", "action.confirm", "menu.confirm", &prompt_cfg );
                 vxui_demo_shared_emit_prompt_pair( ctx, "loadout.prompt.cancel", "action.cancel", "menu.cancel", &prompt_cfg );
             } );
@@ -738,7 +731,7 @@ inline void vxui_demo_render_archives_screen_shared( vxui_ctx* ctx, const vxui_d
     vxui_menu_style form_style = vxui_demo_shared_menu_style_form_deck( visuals, 132.0f );
 
     vxui_demo_shared_emit_screen_surface( ctx, "archives", "archives.surface", layout.surface.surface_width, layout.surface_max_height, rtl, cfg.background_scanline, [&]() {
-        vxui_demo_shared_emit_screen_header( ctx, "archives.header", "menu.archives", visuals, 46.0f );
+        vxui_demo_shared_emit_screen_header( ctx, "archives.header", "menu.archives", visuals, 38.0f );
 
         VXUI( ctx, "archives.deck", {
             .layout = {
@@ -780,16 +773,16 @@ inline void vxui_demo_render_archives_screen_shared( vxui_ctx* ctx, const vxui_d
             VXUI( ctx, "archives.detail", {
                 .layout = {
                     .sizing = { CLAY_SIZING_FIXED( layout.secondary_lane_width ), CLAY_SIZING_GROW( 0 ) },
-                    .padding = CLAY_PADDING_ALL( 20 ),
-                    .childGap = 12,
+                    .padding = CLAY_PADDING_ALL( 14 ),
+                    .childGap = 8,
                     .layoutDirection = CLAY_TOP_TO_BOTTOM,
                 },
                 .backgroundColor = vxui_demo_clay_color( theme.secondary_panel_fill ),
                 .cornerRadius = CLAY_CORNER_RADIUS( 12 ),
                 .border = vxui_demo_panel_border( theme.secondary_panel_border, 1 ),
             } ) {
-                VXUI_LABEL( ctx, entry.title, vxui_demo_text_style( visuals.title_font_id, 40.0f, theme.title_text ) );
-                VXUI_LABEL( ctx, entry.subtitle, vxui_demo_text_style( visuals.section_font_id, 24.0f, theme.accent_cool ) );
+                VXUI_LABEL( ctx, entry.title, vxui_demo_text_style( visuals.title_font_id, 34.0f, theme.title_text ) );
+                VXUI_LABEL( ctx, entry.subtitle, vxui_demo_text_style( visuals.section_font_id, 20.0f, theme.accent_cool ) );
                 CLAY( vxui_demo_split_deck_hashed_id( vxui_id( "archives.detail.body_viewport" ) ), {
                     .layout = {
                         .sizing = { CLAY_SIZING_GROW( 0 ), CLAY_SIZING_GROW( 160.0f ) },
@@ -803,13 +796,13 @@ inline void vxui_demo_render_archives_screen_shared( vxui_ctx* ctx, const vxui_d
                     VXUI( ctx, "archives.detail.body", {
                         .layout = {
                             .sizing = { CLAY_SIZING_GROW( 0 ), CLAY_SIZING_FIT( 0 ) },
-                            .padding = { 0, 0, 0, 12 },
-                            .childGap = 12,
+                            .padding = { 0, 0, 0, 8 },
+                            .childGap = 8,
                             .layoutDirection = CLAY_TOP_TO_BOTTOM,
                         },
                     } ) {
-                        VXUI_LABEL( ctx, entry.detail, vxui_demo_text_style( visuals.body_font_id, 20.0f, theme.body_text ) );
-                        VXUI_LABEL( ctx, entry.meta, vxui_demo_text_style( visuals.body_font_id, 17.0f, entry.unlocked ? theme.section_text : theme.alert_text ) );
+                        VXUI_LABEL( ctx, entry.detail, vxui_demo_text_style( visuals.body_font_id, 17.0f, theme.body_text ) );
+                        VXUI_LABEL( ctx, entry.meta, vxui_demo_text_style( visuals.body_font_id, 15.0f, entry.unlocked ? theme.section_text : theme.alert_text ) );
                     }
                 }
             }
@@ -818,16 +811,17 @@ inline void vxui_demo_render_archives_screen_shared( vxui_ctx* ctx, const vxui_d
         VXUI( ctx, "archives.footer", {
             .layout = {
                 .sizing = { CLAY_SIZING_GROW( 0 ), CLAY_SIZING_FIT( 0 ) },
-                .padding = CLAY_PADDING_ALL( 18 ),
-                .childGap = ( uint16_t ) VXUI_DEMO_LAYOUT_ROW_GAP,
-                .layoutDirection = CLAY_TOP_TO_BOTTOM,
+                .padding = CLAY_PADDING_ALL( 8 ),
+                .childGap = 6,
+                .childAlignment = { .y = CLAY_ALIGN_Y_CENTER },
+                .layoutDirection = CLAY_LEFT_TO_RIGHT,
             },
             .backgroundColor = vxui_demo_clay_color( theme.utility_fill ),
             .cornerRadius = CLAY_CORNER_RADIUS( 12 ),
             .border = vxui_demo_panel_border( theme.utility_border, 1 ),
         } ) {
             vxui_demo_shared_emit_footer_action_bar( ctx, "archives.footer.prompts", rtl, [&]() {
-                const vxui_label_cfg prompt_cfg = vxui_demo_text_style( visuals.body_font_id, 18.0f, theme.utility_text );
+                const vxui_label_cfg prompt_cfg = vxui_demo_text_style( visuals.body_font_id, 15.0f, theme.utility_text );
                 vxui_demo_shared_emit_prompt_pair( ctx, "archives.prompt.confirm", "action.confirm", "menu.confirm", &prompt_cfg );
                 vxui_demo_shared_emit_prompt_pair( ctx, "archives.prompt.cancel", "action.cancel", "menu.cancel", &prompt_cfg );
             } );
@@ -854,7 +848,7 @@ inline void vxui_demo_render_records_screen_shared( vxui_ctx* ctx, const vxui_de
     vxui_menu_style form_style = vxui_demo_shared_menu_style_form_deck( visuals, 132.0f );
 
     vxui_demo_shared_emit_screen_surface( ctx, "records", "records.surface", layout.surface.surface_width, layout.surface_max_height, rtl, cfg.background_scanline, [&]() {
-        vxui_demo_shared_emit_screen_header( ctx, "records.header", "menu.records", visuals, 46.0f );
+        vxui_demo_shared_emit_screen_header( ctx, "records.header", "menu.records", visuals, 38.0f );
 
         VXUI( ctx, "records.deck", {
             .layout = {
@@ -885,16 +879,16 @@ inline void vxui_demo_render_records_screen_shared( vxui_ctx* ctx, const vxui_de
             VXUI( ctx, "records.detail", {
                 .layout = {
                     .sizing = { CLAY_SIZING_FIXED( layout.secondary_lane_width ), CLAY_SIZING_GROW( 0 ) },
-                    .padding = CLAY_PADDING_ALL( 20 ),
-                    .childGap = 12,
+                    .padding = CLAY_PADDING_ALL( 14 ),
+                    .childGap = 8,
                     .layoutDirection = CLAY_TOP_TO_BOTTOM,
                 },
                 .backgroundColor = vxui_demo_clay_color( theme.secondary_panel_fill ),
                 .cornerRadius = CLAY_CORNER_RADIUS( 12 ),
                 .border = vxui_demo_panel_border( theme.secondary_panel_border, 1 ),
             } ) {
-                VXUI_LABEL( ctx, record.run_name, vxui_demo_text_style( visuals.title_font_id, 40.0f, theme.title_text ) );
-                VXUI_LABEL( ctx, record.pilot_name, vxui_demo_text_style( visuals.section_font_id, 24.0f, theme.accent_cool ) );
+                VXUI_LABEL( ctx, record.run_name, vxui_demo_text_style( visuals.title_font_id, 34.0f, theme.title_text ) );
+                VXUI_LABEL( ctx, record.pilot_name, vxui_demo_text_style( visuals.section_font_id, 20.0f, theme.accent_cool ) );
                 CLAY( vxui_demo_split_deck_hashed_id( vxui_id( "records.detail.body_viewport" ) ), {
                     .layout = {
                         .sizing = { CLAY_SIZING_GROW( 0 ), CLAY_SIZING_GROW( 160.0f ) },
@@ -908,16 +902,16 @@ inline void vxui_demo_render_records_screen_shared( vxui_ctx* ctx, const vxui_de
                     VXUI( ctx, "records.detail.body", {
                         .layout = {
                             .sizing = { CLAY_SIZING_GROW( 0 ), CLAY_SIZING_FIT( 0 ) },
-                            .padding = { 0, 0, 0, 12 },
-                            .childGap = 12,
+                            .padding = { 0, 0, 0, 8 },
+                            .childGap = 8,
                             .layoutDirection = CLAY_TOP_TO_BOTTOM,
                         },
                     } ) {
-                        VXUI_LABEL( ctx, record.ship_name, vxui_demo_text_style( visuals.body_font_id, 20.0f, theme.body_text ) );
-                        VXUI_LABEL( ctx, record.stage_name, vxui_demo_text_style( visuals.body_font_id, 20.0f, theme.section_text ) );
-                        VXUI_LABEL( ctx, record.score_text, vxui_demo_text_style( visuals.section_font_id, 26.0f, theme.title_text ) );
-                        VXUI_LABEL( ctx, record.clear_text, vxui_demo_text_style( visuals.body_font_id, 18.0f, theme.success_text ) );
-                        VXUI_LABEL( ctx, record.note, vxui_demo_text_style( visuals.body_font_id, 17.0f, theme.muted_text ) );
+                        VXUI_LABEL( ctx, record.ship_name, vxui_demo_text_style( visuals.body_font_id, 17.0f, theme.body_text ) );
+                        VXUI_LABEL( ctx, record.stage_name, vxui_demo_text_style( visuals.body_font_id, 17.0f, theme.section_text ) );
+                        VXUI_LABEL( ctx, record.score_text, vxui_demo_text_style( visuals.section_font_id, 22.0f, theme.title_text ) );
+                        VXUI_LABEL( ctx, record.clear_text, vxui_demo_text_style( visuals.body_font_id, 16.0f, theme.success_text ) );
+                        VXUI_LABEL( ctx, record.note, vxui_demo_text_style( visuals.body_font_id, 15.0f, theme.muted_text ) );
                     }
                 }
             }
@@ -926,16 +920,17 @@ inline void vxui_demo_render_records_screen_shared( vxui_ctx* ctx, const vxui_de
         VXUI( ctx, "records.footer", {
             .layout = {
                 .sizing = { CLAY_SIZING_GROW( 0 ), CLAY_SIZING_FIT( 0 ) },
-                .padding = CLAY_PADDING_ALL( 18 ),
-                .childGap = ( uint16_t ) VXUI_DEMO_LAYOUT_ROW_GAP,
-                .layoutDirection = CLAY_TOP_TO_BOTTOM,
+                .padding = CLAY_PADDING_ALL( 8 ),
+                .childGap = 6,
+                .childAlignment = { .y = CLAY_ALIGN_Y_CENTER },
+                .layoutDirection = CLAY_LEFT_TO_RIGHT,
             },
             .backgroundColor = vxui_demo_clay_color( theme.utility_fill ),
             .cornerRadius = CLAY_CORNER_RADIUS( 12 ),
             .border = vxui_demo_panel_border( theme.utility_border, 1 ),
         } ) {
             vxui_demo_shared_emit_footer_action_bar( ctx, "records.footer.prompts", rtl, [&]() {
-                const vxui_label_cfg prompt_cfg = vxui_demo_text_style( visuals.body_font_id, 18.0f, theme.utility_text );
+                const vxui_label_cfg prompt_cfg = vxui_demo_text_style( visuals.body_font_id, 15.0f, theme.utility_text );
                 vxui_demo_shared_emit_prompt_pair( ctx, "records.prompt.confirm", "action.confirm", "menu.confirm", &prompt_cfg );
                 vxui_demo_shared_emit_prompt_pair( ctx, "records.prompt.cancel", "action.cancel", "menu.cancel", &prompt_cfg );
             } );

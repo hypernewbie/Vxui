@@ -3,11 +3,11 @@
 #include <algorithm>
 #include <cstring>
 
-inline constexpr float VXUI_DEMO_LAYOUT_OUTER_PADDING = 18.0f;
-inline constexpr float VXUI_DEMO_LAYOUT_SURFACE_PADDING_X = 28.0f;
-inline constexpr float VXUI_DEMO_LAYOUT_SURFACE_PADDING_Y = 24.0f;
-inline constexpr float VXUI_DEMO_LAYOUT_SECTION_GAP = 16.0f;
-inline constexpr float VXUI_DEMO_LAYOUT_ROW_GAP = 12.0f;
+inline constexpr float VXUI_DEMO_LAYOUT_OUTER_PADDING = 16.0f;
+inline constexpr float VXUI_DEMO_LAYOUT_SURFACE_PADDING_X = 24.0f;
+inline constexpr float VXUI_DEMO_LAYOUT_SURFACE_PADDING_Y = 18.0f;
+inline constexpr float VXUI_DEMO_LAYOUT_SECTION_GAP = 14.0f;
+inline constexpr float VXUI_DEMO_LAYOUT_ROW_GAP = 10.0f;
 inline constexpr float VXUI_DEMO_LAYOUT_INLINE_GAP = 8.0f;
 
 enum vxui_demo_surface_kind
@@ -366,11 +366,11 @@ inline vxui_demo_main_menu_contract vxui_demo_get_main_menu_contract( void )
         18.0f,
         250.0f,
         260.0f,
-        20.0f,
-        12.0f,
-        120.0f,
-        220.0f,
-        14.0f,
+        16.0f,
+        10.0f,
+        84.0f,
+        132.0f,
+        8.0f,
     };
 }
 
@@ -430,25 +430,25 @@ inline vxui_demo_controls_block_contract vxui_demo_get_controls_block_contract( 
     const bool compact_width = owner_width > 0.0f && owner_width <= 520.0f;
     if ( compact_height || compact_width ) {
         return {
+            6,
             8,
-            11,
-            16.0f,
             14.0f,
-            4.0f,
-            88.0f,
+            12.0f,
+            3.0f,
+            34.0f,
             true,
-            4,
+            1,
         };
     }
     return {
-        18,
-        ( uint16_t ) VXUI_DEMO_LAYOUT_ROW_GAP,
-        24.0f,
-        24.0f,
-        8.0f,
+        12,
+        8,
+        20.0f,
+        17.0f,
+        6.0f,
         0.0f,
         false,
-        4,
+        1,
     };
 }
 
@@ -543,16 +543,22 @@ inline vxui_demo_main_menu_layout_spec vxui_demo_resolve_main_menu_layout(
         std::clamp( surface.content_width * command_fraction, command_min_width, command_max_width );
     const float preview_panel_width =
         std::max( preview_min_width, surface.content_width - command_panel_width - deck_gap );
-    const float footer_reserve = std::min( contract.footer_reserve, std::max( 180.0f, surface_max_height * 0.35f ) );
-    const float usable_deck_height = std::max( 0.0f, surface_max_height - footer_reserve );
-    const float preview_panel_padding = tight_width ? 12.0f : contract.preview_panel_padding;
+    const float footer_reserve = std::min( contract.footer_reserve, std::max( 164.0f, surface_max_height * 0.31f ) );
+    const float hero_reserve = surface_max_height <= 720.0f ? 76.0f : 92.0f;
+    const float usable_deck_height = std::max( 0.0f, surface_max_height - footer_reserve - hero_reserve );
+    const float preview_panel_padding = tight_width ? 10.0f : contract.preview_panel_padding;
     const float preview_header_min_height =
-        std::clamp( preview_panel_width * 0.24f, tight_width ? 100.0f : contract.preview_header_min_height, 180.0f );
-    const float preview_header_gap = tight_width ? 10.0f : contract.preview_header_gap;
-    const float preview_viewport_bottom_guard = tight_width ? 8.0f : contract.preview_viewport_bottom_guard;
+        std::clamp( preview_panel_width * 0.18f, tight_width ? 78.0f : contract.preview_header_min_height, 136.0f );
+    const float preview_header_gap = tight_width ? 8.0f : contract.preview_header_gap;
+    const float preview_viewport_bottom_guard = tight_width ? 4.0f : contract.preview_viewport_bottom_guard;
+    const float controls_owner_width = std::max( 0.0f, preview_panel_width - preview_panel_padding * 2.0f );
+    const vxui_demo_controls_block_contract controls_contract =
+        vxui_demo_get_controls_block_contract( surface_max_height <= 720.0f ? 648.0f : surface_max_height, controls_owner_width );
+    const float help_reserve = controls_contract.min_height > 0.0f ? controls_contract.min_height + VXUI_DEMO_LAYOUT_ROW_GAP : 0.0f;
     const float preview_body_viewport_height = std::max(
         contract.preview_viewport_min_height,
         usable_deck_height - preview_header_min_height - preview_header_gap - preview_viewport_bottom_guard
+            - help_reserve
             - preview_panel_padding * 2.0f );
 
     return {
@@ -562,7 +568,7 @@ inline vxui_demo_main_menu_layout_spec vxui_demo_resolve_main_menu_layout(
         preview_panel_width,
         deck_gap,
         footer_reserve,
-        std::max( contract.command_menu_viewport_min_height, usable_deck_height - 16.0f ),
+        std::max( contract.command_menu_viewport_min_height, usable_deck_height - 8.0f ),
         preview_panel_padding,
         preview_header_min_height,
         preview_header_gap,
@@ -612,7 +618,8 @@ inline vxui_demo_settings_layout_spec vxui_demo_resolve_settings_layout(
     const vxui_demo_settings_contract contract = vxui_demo_get_settings_contract();
     const float surface_max_height = std::max( 0.0f, viewport_height );
     const float footer_reserve = std::min( contract.footer_reserve, std::max( 180.0f, surface_max_height * 0.35f ) );
-    const float menu_viewport_height = std::max( contract.menu_viewport_min_height, surface_max_height - footer_reserve );
+    const float header_reserve = surface_max_height <= 720.0f ? 86.0f : 102.0f;
+    const float menu_viewport_height = std::max( contract.menu_viewport_min_height, surface_max_height - footer_reserve - header_reserve );
     return {
         surface,
         surface_max_height,

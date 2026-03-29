@@ -71,13 +71,13 @@ inline Clay_String vxui_demo_shared_clay_string( const char* text )
 }
 
 inline constexpr vxui_demo_main_menu_preview VXUI_DEMO_MAIN_MENU_PREVIEWS[] = {
-    { "sortie", "Sortie Command", "Deploy a live mission stub.", "Choose a mission rail, set difficulty, and run a full launch-to-results loop without leaving the front end.", "badge.recommended" },
-    { "loadout", "Loadout Deck", "Tune the frame before launch.", "Swap the chassis, primary, support, and system packages while watching the command-deck stat card react in real time.", "badge.demo" },
-    { "archives", "Archives Vault", "Badge, lock, and detail patterns.", "Inspect intel, frame logs, and signal captures with locked entries still visible to show list/detail states.", "badge.demo" },
-    { "settings", "Settings Grid", "Carry-forward locale and prompt controls.", "Locale switching, prompt-table switching, scroll-safe settings layout, and visual toggles all live in one bounded surface.", "badge.recommended" },
-    { "records", "Records Relay", "Scoreboard and debrief split view.", "Browse demo-owned run summaries, board filters, and result notes in a wider desktop list/detail surface.", "badge.demo" },
-    { "credits", "Credits Channel", "Acknowledgements and stack callouts.", "A lightweight text-heavy screen that still lives inside the same command-deck shell and navigation model.", "badge.demo" },
-    { "quit", "Quit Demo", "Exit the command deck.", "Close the demo executable after proving the front-end loop and shell flow.", nullptr },
+    { "sortie", "Sortie Command", "Deploy a live mission stub.", "Choose a mission rail, set difficulty, and launch.", "badge.recommended" },
+    { "loadout", "Loadout Deck", "Tune the frame before launch.", "Swap frame and systems before launch.", "badge.demo" },
+    { "archives", "Archives Vault", "Badge, lock, and detail patterns.", "Inspect intel, logs, and locked archive entries.", "badge.demo" },
+    { "settings", "Settings Grid", "Carry-forward locale and prompt controls.", "Flip locale, prompts, and visual toggles safely.", "badge.recommended" },
+    { "records", "Records Relay", "Scoreboard and debrief split view.", "Review board filters, run summaries, and notes.", "badge.demo" },
+    { "credits", "Credits Channel", "Acknowledgements and stack callouts.", "Read acknowledgements and renderer stack notes.", "badge.demo" },
+    { "quit", "Quit Demo", "Exit the command deck.", "Leave the demo after reviewing the shell.", nullptr },
 };
 
 inline std::string vxui_demo_controls_block_title_id( const char* id )
@@ -164,24 +164,20 @@ inline vxui_demo_controls_block_copy vxui_demo_controls_block_copy_for_locale( c
             return {
                 "操作",
                 {
-                    "矢印 / Dパッドで移動。",
-                    "Enter / Space / Aで決定。",
-                    "Esc / Backspace / Bで戻る。",
-                    "[ / ]で列切替。1-5で設定。",
+                    "移動 / 決定 / 戻る: 矢印 / Enter / Esc。",
+                    "",
+                    "",
+                    "",
                 },
             };
         }
         return {
             "操作",
             {
-                "矢印 / Dパッドで移動、Enter / Space / A で決定。",
-                "Escape / Backspace / B で戻る、[ と ] でタブ切替。",
-                "1 2 3 で言語、4 5 でプロンプト表を切替。",
-#ifdef VXUI_DEBUG
-                "F1 でデバッガー、R でホットリロード確認、C で書き出しをコピー。",
-#else
-                "デバッグビルドでシーケンスデバッガーを有効にできます。",
-#endif
+                "移動 / 決定 / 戻る: 矢印 / Enter / Escape。 [ ]で列、1-5で設定。",
+                "",
+                "",
+                "",
             },
         };
     }
@@ -190,24 +186,20 @@ inline vxui_demo_controls_block_copy vxui_demo_controls_block_copy_for_locale( c
             return {
                 "التحكم",
                 {
-                    "الأسهم / الاتجاهات للحركة.",
-                    "Enter / Space / A للتأكيد.",
-                    "Esc / Backspace / B للرجوع.",
-                    "[ / ] للأعمدة. 1-5 للإعداد.",
+                    "الحركة / التأكيد / الرجوع: الأسهم / Enter / Esc.",
+                    "",
+                    "",
+                    "",
                 },
             };
         }
         return {
             "التحكم",
             {
-                "الأسهم / لوحة الاتجاهات للتنقل، و Enter / Space / A للتأكيد.",
-                "Escape / Backspace / B للرجوع، و [ و ] للتبديل بين الأعمدة.",
-                "1 2 3 لتبديل اللغة، و 4 5 لتبديل جدول الأزرار.",
-#ifdef VXUI_DEBUG
-                "F1 لفتح المصحح، و R للتحقق من إعادة التحميل، و C لنسخ المخرجات.",
-#else
-                "شغّل بناء التصحيح لتفعيل مصحح التسلسلات.",
-#endif
+                "الحركة / التأكيد / الرجوع: الأسهم / Enter / Escape. ‏[ و ] للأعمدة و 1-5 للإعداد.",
+                "",
+                "",
+                "",
             },
         };
     }
@@ -215,24 +207,20 @@ inline vxui_demo_controls_block_copy vxui_demo_controls_block_copy_for_locale( c
         return {
             "Controls",
             {
-                "Arrows / D-pad move.",
-                "Enter / Space / A confirm.",
-                "Esc / Backspace / B back.",
-                "[ / ] lanes. 1-5 setup.",
+                "Move / confirm / back: arrows / Enter / Esc.",
+                "",
+                "",
+                "",
             },
         };
     }
     return {
         "Controls",
         {
-            "Arrows / D-pad navigate, Enter / Space / A confirm.",
-            "Escape / Backspace / B cancels, [ and ] tab between lanes.",
-            "1 2 3 switch locale, 4 5 switch prompt table.",
-#ifdef VXUI_DEBUG
-            "F1 toggles the debugger, R polls hot reload, C copies or prints exports.",
-#else
-            "Build a Debug configuration to enable the sequence debugger overlay.",
-#endif
+            "Move / confirm / back: arrows / Enter / Escape. [ ] lanes, 1-5 settings.",
+            "",
+            "",
+            "",
         },
     };
 }
@@ -244,14 +232,14 @@ inline vxui_menu_style vxui_demo_make_title_deck_menu_style( uint32_t body_font_
     style.body_font_id = body_font_id;
     style.title_font_id = title_font_id;
     style.badge_font_id = body_font_id;
-    style.body_font_size = 24.0f;
-    style.title_font_size = 42.0f;
-    style.badge_font_size = 15.0f;
-    style.row_height = 58.0f;
-    style.row_gap = 10.0f;
-    style.section_gap = 14.0f;
-    style.padding_x = 20.0f;
-    style.padding_y = 18.0f;
+    style.body_font_size = 18.0f;
+    style.title_font_size = 28.0f;
+    style.badge_font_size = 11.0f;
+    style.row_height = 38.0f;
+    style.row_gap = 3.0f;
+    style.section_gap = 8.0f;
+    style.padding_x = 16.0f;
+    style.padding_y = 8.0f;
     vxui_demo_apply_title_menu_theme( style );
     return style;
 }
@@ -279,7 +267,7 @@ inline void vxui_demo_emit_compact_meta_row_text(
             .sizing = { CLAY_SIZING_FIT( 0 ), CLAY_SIZING_FIT( 0 ) },
             .childGap = ( uint16_t ) VXUI_DEMO_LAYOUT_INLINE_GAP,
             .childAlignment = { .y = CLAY_ALIGN_Y_CENTER },
-            .layoutDirection = CLAY_LEFT_TO_RIGHT,
+            .layoutDirection = CLAY_TOP_TO_BOTTOM,
         },
     } ) {
         if ( rtl ) {
@@ -328,19 +316,19 @@ inline void vxui_demo_emit_main_menu_footer(
     bool compact_vertical )
 {
     const vxui_demo_command_deck_theme& theme = vxui_demo_command_deck_theme_tokens();
-    const uint16_t footer_padding = ( uint16_t ) ( compact_vertical ? 4 : 12 );
-    const uint16_t footer_gap = ( uint16_t ) ( compact_vertical ? 4 : 8 );
-    const uint16_t row_padding = ( uint16_t ) ( compact_vertical ? 4 : 8 );
-    const vxui_label_cfg prompt_footer_text_cfg = vxui_demo_text_style( 0, compact_vertical ? 15.0f : 17.0f, theme.utility_text );
-    const vxui_label_cfg compact_footer_text_cfg = vxui_demo_text_style( 0, compact_vertical ? 14.0f : 15.0f, theme.muted_text );
-    const vxui_value_cfg compact_footer_value_cfg = vxui_demo_value_style( 0, compact_vertical ? 14.0f : 15.0f, theme.muted_text, "%.0f" );
+    const uint16_t footer_padding = ( uint16_t ) ( compact_vertical ? 1 : 6 );
+    const uint16_t footer_gap = ( uint16_t ) ( compact_vertical ? 2 : 4 );
+    const uint16_t row_padding = ( uint16_t ) ( compact_vertical ? 2 : 4 );
+    const vxui_label_cfg prompt_footer_text_cfg = vxui_demo_text_style( 0, compact_vertical ? 13.0f : 14.0f, theme.utility_text );
+    const vxui_label_cfg compact_footer_text_cfg = vxui_demo_text_style( 0, compact_vertical ? 12.0f : 13.0f, theme.muted_text );
+    const vxui_value_cfg compact_footer_value_cfg = vxui_demo_value_style( 0, compact_vertical ? 12.0f : 13.0f, theme.muted_text, "%.0f" );
     CLAY( Clay_GetElementId( vxui_demo_shared_clay_string( "main.footer" ) ), {
         .layout = {
             .sizing = { CLAY_SIZING_GROW( 0 ), CLAY_SIZING_FIT( 0 ) },
             .padding = CLAY_PADDING_ALL( footer_padding ),
             .childGap = footer_gap,
             .childAlignment = { .y = CLAY_ALIGN_Y_CENTER },
-            .layoutDirection = CLAY_TOP_TO_BOTTOM,
+            .layoutDirection = CLAY_LEFT_TO_RIGHT,
         },
         .backgroundColor = vxui_demo_clay_color( theme.utility_fill ),
         .cornerRadius = CLAY_CORNER_RADIUS( compact_vertical ? 10.0f : 12.0f ),
@@ -353,7 +341,7 @@ inline void vxui_demo_emit_main_menu_footer(
                     .padding = CLAY_PADDING_ALL( row_padding ),
                     .childGap = footer_gap,
                     .childAlignment = { .y = CLAY_ALIGN_Y_CENTER },
-                    .layoutDirection = CLAY_LEFT_TO_RIGHT,
+                    .layoutDirection = CLAY_TOP_TO_BOTTOM,
                 },
                 .backgroundColor = vxui_demo_clay_color( theme.action_fill ),
                 .cornerRadius = CLAY_CORNER_RADIUS( 10 ),
@@ -367,7 +355,7 @@ inline void vxui_demo_emit_main_menu_footer(
                     .sizing = { CLAY_SIZING_GROW( 0 ), CLAY_SIZING_FIT( 0 ) },
                     .padding = CLAY_PADDING_ALL( row_padding ),
                     .childGap = footer_gap,
-                    .layoutDirection = CLAY_TOP_TO_BOTTOM,
+                    .layoutDirection = CLAY_LEFT_TO_RIGHT,
                 },
                 .backgroundColor = vxui_demo_clay_color( theme.secondary_panel_fill ),
                 .cornerRadius = CLAY_CORNER_RADIUS( 10 ),
@@ -393,7 +381,7 @@ inline void vxui_demo_emit_main_menu_footer(
                     .padding = CLAY_PADDING_ALL( row_padding ),
                     .childGap = footer_gap,
                     .childAlignment = { .y = CLAY_ALIGN_Y_CENTER },
-                    .layoutDirection = CLAY_LEFT_TO_RIGHT,
+                    .layoutDirection = CLAY_TOP_TO_BOTTOM,
                 },
                 .backgroundColor = vxui_demo_clay_color( theme.action_fill ),
                 .cornerRadius = CLAY_CORNER_RADIUS( 10 ),
@@ -407,7 +395,7 @@ inline void vxui_demo_emit_main_menu_footer(
                     .sizing = { CLAY_SIZING_GROW( 0 ), CLAY_SIZING_FIT( 0 ) },
                     .padding = CLAY_PADDING_ALL( row_padding ),
                     .childGap = footer_gap,
-                    .layoutDirection = CLAY_TOP_TO_BOTTOM,
+                    .layoutDirection = CLAY_LEFT_TO_RIGHT,
                 },
                 .backgroundColor = vxui_demo_clay_color( theme.secondary_panel_fill ),
                 .cornerRadius = CLAY_CORNER_RADIUS( 10 ),
@@ -416,19 +404,12 @@ inline void vxui_demo_emit_main_menu_footer(
                     .layout = {
                         .sizing = { CLAY_SIZING_GROW( 0 ), CLAY_SIZING_FIT( 0 ) },
                         .childGap = footer_gap,
+                        .childAlignment = { .x = rtl ? CLAY_ALIGN_X_RIGHT : CLAY_ALIGN_X_LEFT, .y = CLAY_ALIGN_Y_CENTER },
                         .layoutDirection = CLAY_LEFT_TO_RIGHT,
                     },
                 } ) {
                     vxui_demo_emit_compact_meta_row_text( ctx, "main.footer.status.locale", locale_label, locale_value, rtl, &compact_footer_text_cfg );
                     vxui_demo_emit_compact_meta_row_text( ctx, "main.footer.status.prompts", prompts_label, prompts_value, rtl, &compact_footer_text_cfg );
-                }
-                CLAY( Clay_GetElementId( vxui_demo_shared_clay_string( "main.footer.status.row.secondary" ) ), {
-                    .layout = {
-                        .sizing = { CLAY_SIZING_GROW( 0 ), CLAY_SIZING_FIT( 0 ) },
-                        .childGap = footer_gap,
-                        .layoutDirection = CLAY_LEFT_TO_RIGHT,
-                    },
-                } ) {
                     VXUI_VALUE( ctx, screens_label, ( float ) screen_count, compact_footer_value_cfg );
                     vxui_demo_emit_compact_meta_row_text( ctx, "main.footer.status.top", top_label, top_value, rtl, &compact_footer_text_cfg );
                 }
@@ -463,8 +444,8 @@ inline void vxui_demo_emit_controls_block(
     const vxui_demo_command_deck_theme& theme = vxui_demo_command_deck_theme_tokens();
     const vxui_demo_controls_block_copy copy = vxui_demo_controls_block_copy_for_locale( locale, visuals.compact_copy );
     const float line_gap = std::max( visuals.line_gap_min, ( float ) visuals.row_gap );
-    const float title_font_size = visuals.compact_copy ? std::max( 15.0f, visuals.title_font_size - 1.0f ) : std::max( 20.0f, visuals.title_font_size - 2.0f );
-    const float line_font_size = visuals.compact_copy ? std::max( 13.0f, visuals.line_font_size - 1.0f ) : std::max( 18.0f, visuals.line_font_size - 2.0f );
+    const float title_font_size = visuals.compact_copy ? std::max( 12.0f, visuals.title_font_size - 0.5f ) : std::max( 16.0f, visuals.title_font_size - 1.0f );
+    const float line_font_size = visuals.compact_copy ? std::max( 10.5f, visuals.line_font_size - 0.5f ) : std::max( 14.0f, visuals.line_font_size - 1.0f );
     CLAY( Clay_GetElementId( vxui_demo_shared_clay_string( id ) ), {
         .layout = {
             .sizing = { CLAY_SIZING_GROW( 0 ), CLAY_SIZING_FIT( visuals.min_height ) },
@@ -515,20 +496,20 @@ inline void vxui_demo_emit_main_menu_preview_panel(
     const char* preview_label_text )
 {
     const vxui_demo_command_deck_theme& theme = vxui_demo_command_deck_theme_tokens();
-    const bool compact = layout.surface_max_height <= 650.0f;
-    const float panel_padding = compact ? 8.0f : layout.preview_panel_padding;
-    const float header_min_height = compact ? 76.0f : layout.preview_header_min_height;
-    const float header_label_size = compact ? 18.0f : 26.0f;
-    const float title_size = compact ? 30.0f : 40.0f;
-    const float subtitle_size = compact ? 14.0f : 21.0f;
-    const float badge_size = compact ? 12.0f : 15.0f;
-    const float body_size = compact ? 14.0f : 18.0f;
-    const float body_gap = compact ? 6.0f : 9.0f;
+    const bool compact = layout.surface_max_height <= 720.0f;
+    const float panel_padding = compact ? 6.0f : layout.preview_panel_padding;
+    const float header_min_height = compact ? 46.0f : layout.preview_header_min_height;
+    const float header_label_size = compact ? 13.0f : 18.0f;
+    const float title_size = compact ? 22.0f : 28.0f;
+    const float subtitle_size = compact ? 11.0f : 15.0f;
+    const float badge_size = compact ? 11.0f : 13.0f;
+    const float body_size = compact ? 11.0f : 14.0f;
+    const float body_gap = compact ? 3.0f : 5.0f;
     const float preview_to_help_gap = 8.0f;
-    const float body_bottom_guard = compact ? 4.0f : layout.preview_viewport_bottom_guard;
+    const float body_bottom_guard = compact ? 2.0f : layout.preview_viewport_bottom_guard;
     const float help_owner_width = std::max( 0.0f, layout.preview_panel_width - panel_padding * 2.0f );
     const vxui_demo_controls_block_visuals controls_visuals =
-        vxui_demo_controls_block_visuals_for_height( layout.surface_max_height, help_owner_width );
+        vxui_demo_controls_block_visuals_for_height( compact ? 648.0f : layout.surface_max_height, help_owner_width );
 
     VXUI( ctx, "main.preview_panel", {
         .layout = {
@@ -544,7 +525,7 @@ inline void vxui_demo_emit_main_menu_preview_panel(
         VXUI( ctx, "main.preview_header", {
             .layout = {
                 .sizing = { CLAY_SIZING_GROW( 0 ), CLAY_SIZING_FIT( header_min_height ) },
-                .childGap = 8,
+                .childGap = 4,
                 .layoutDirection = CLAY_TOP_TO_BOTTOM,
             },
         } ) {
@@ -569,7 +550,7 @@ inline void vxui_demo_emit_main_menu_preview_panel(
         } ) {
             CLAY( Clay_GetElementId( vxui_demo_shared_clay_string( "main.preview_body_viewport" ) ), {
                 .layout = {
-                    .sizing = { CLAY_SIZING_GROW( 0 ), CLAY_SIZING_GROW( 0 ) },
+                    .sizing = { CLAY_SIZING_GROW( 0 ), CLAY_SIZING_FIXED( layout.preview_body_viewport_height ) },
                     .layoutDirection = CLAY_TOP_TO_BOTTOM,
                 },
                 .clip = {
@@ -585,16 +566,18 @@ inline void vxui_demo_emit_main_menu_preview_panel(
                         .layoutDirection = CLAY_TOP_TO_BOTTOM,
                     },
                     } ) {
-                        VXUI_LABEL( ctx, preview.subtitle, vxui_demo_text_style( visuals.section_font_id, subtitle_size, theme.accent_cool ) );
+                        if ( !compact ) {
+                            VXUI_LABEL( ctx, preview.subtitle, vxui_demo_text_style( visuals.section_font_id, subtitle_size, theme.accent_cool ) );
+                        }
                         const char* badge_text = vxui_demo_badge_text( locale, preview.badge_key );
                         if ( badge_text && !compact ) {
                             VXUI( ctx, "main.preview.badge", {
                                 .layout = {
                                     .sizing = { CLAY_SIZING_FIT( 0 ), CLAY_SIZING_FIT( 0 ) },
-                                .padding = { 10, 10, 5, 5 },
+                                .padding = { 8, 8, 4, 4 },
                             },
                             .backgroundColor = vxui_demo_clay_color( theme.badge_fill ),
-                            .cornerRadius = CLAY_CORNER_RADIUS( 8 ),
+                            .cornerRadius = CLAY_CORNER_RADIUS( 6 ),
                         } ) {
                             VXUI_LABEL( ctx, badge_text, vxui_demo_text_style( visuals.body_font_id, badge_size, theme.badge_text ) );
                         }
@@ -627,13 +610,13 @@ inline void vxui_demo_emit_main_menu_shell(
 {
     const bool compact_vertical = layout.surface_max_height <= 650.0f;
     const vxui_demo_command_deck_theme& theme = vxui_demo_command_deck_theme_tokens();
-    const uint16_t hero_padding = ( uint16_t ) ( compact_vertical ? 10 : 18 );
+    const uint16_t hero_padding = ( uint16_t ) ( compact_vertical ? 6 : 10 );
 
     VXUI( ctx, "main.hero", {
         .layout = {
             .sizing = { CLAY_SIZING_GROW( 0 ), CLAY_SIZING_FIT( 0 ) },
             .padding = CLAY_PADDING_ALL( hero_padding ),
-            .childGap = 8,
+            .childGap = 4,
             .layoutDirection = CLAY_TOP_TO_BOTTOM,
         },
         .backgroundColor = vxui_demo_clay_color( theme.hero_surface_fill ),
@@ -642,13 +625,13 @@ inline void vxui_demo_emit_main_menu_shell(
     } ) {
         VXUI_LABEL( ctx, copy.hero_title, ( vxui_label_cfg ) {
             .font_id = visuals.title_font_id,
-            .font_size = compact_vertical ? 32.0f : 50.0f,
+            .font_size = compact_vertical ? 24.0f : 36.0f,
             .color = theme.title_text,
         } );
         if ( !compact_vertical && copy.hero_banner && copy.hero_banner[ 0 ] ) {
             VXUI_LABEL( ctx, copy.hero_banner, ( vxui_label_cfg ) {
                 .font_id = visuals.section_font_id,
-                .font_size = 24.0f,
+                .font_size = 16.0f,
                 .color = theme.accent_cool,
             } );
         }

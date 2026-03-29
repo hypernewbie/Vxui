@@ -116,8 +116,8 @@ enum
     VXUI_DEMO_CODE_SIZE = 16,
 };
 
-static constexpr uint16_t VXUI_DEMO_BUTTON_PADDING_X = 12;
-static constexpr uint16_t VXUI_DEMO_BUTTON_PADDING_Y = 6;
+static constexpr uint16_t VXUI_DEMO_BUTTON_PADDING_X = 10;
+static constexpr uint16_t VXUI_DEMO_BUTTON_PADDING_Y = 4;
 static constexpr uint16_t VXUI_DEMO_INLINE_GAP = ( uint16_t ) VXUI_DEMO_LAYOUT_INLINE_GAP;
 static constexpr uint16_t VXUI_DEMO_ROW_GAP = ( uint16_t ) VXUI_DEMO_LAYOUT_ROW_GAP;
 static constexpr uint16_t VXUI_DEMO_SCREEN_GAP = ( uint16_t ) VXUI_DEMO_LAYOUT_SECTION_GAP;
@@ -257,6 +257,9 @@ typedef struct vxui_demo_renderer
     GLuint backend_target_texture;
     GLuint backend_present_fbo;
     GLuint backend_present_texture;
+    bool shot_capture_mode;
+    GLuint shot_capture_fbo;
+    GLuint shot_capture_texture;
     struct vxui_demo_gl_debug
     {
         enum backend
@@ -378,7 +381,10 @@ static void vxui_demo_flip_fontcache_upload( ve_fontcache_drawlist* drawlist, ve
 static void vxui_demo_clear_backend_test_surfaces( vxui_demo_renderer* renderer, bool clear_cpu_atlas_pages );
 static bool vxui_demo_setup_backend_test_fbo( vxui_demo_renderer* renderer );
 static void vxui_demo_shutdown_backend_test_fbo( vxui_demo_renderer* renderer );
+static bool vxui_demo_setup_shot_capture_fbo( vxui_demo_renderer* renderer );
+static void vxui_demo_shutdown_shot_capture_fbo( vxui_demo_renderer* renderer );
 static bool vxui_demo_readback_r8_texture( GLuint texture, int x, int y, int w, int h, uint8_t* out_pixels );
+static bool vxui_demo_capture_rgba_texture_png( GLuint texture, int width, int height, const std::filesystem::path& path, char* error, size_t error_size );
 static bool vxui_demo_write_png_rgba( const std::filesystem::path& path, int width, int height, const uint8_t* pixels, char* error, size_t error_size );
 static bool vxui_demo_capture_backbuffer_png( const std::filesystem::path& path, int width, int height, char* error, size_t error_size );
 static uint32_t vxui_demo_focus_id_for_screen( vxui_demo_screen_kind screen_kind, const char* focus_name );
@@ -1093,13 +1099,13 @@ static void vxui_demo_emit_footer_action_bar( vxui_ctx* ctx, const char* id, boo
     CLAY( vxui__clay_id_from_hash( bar_id ), {
         .layout = {
             .sizing = { CLAY_SIZING_GROW( 0 ), CLAY_SIZING_FIT( 0 ) },
-            .padding = CLAY_PADDING_ALL( 10 ),
-            .childGap = VXUI_DEMO_ROW_GAP,
+            .padding = CLAY_PADDING_ALL( 6 ),
+            .childGap = 6,
             .childAlignment = { .y = CLAY_ALIGN_Y_CENTER },
             .layoutDirection = vxui__resolve_dir( CLAY_LEFT_TO_RIGHT, rtl ),
         },
         .backgroundColor = vxui_demo_clay_color( theme.action_fill ),
-        .cornerRadius = CLAY_CORNER_RADIUS( 10 ),
+        .cornerRadius = CLAY_CORNER_RADIUS( 8 ),
         .border = vxui_demo_panel_border( theme.action_border, 1 ),
     } ) {
         emit_children();
@@ -1158,11 +1164,10 @@ static void vxui_demo_emit_status_summary(
     bool rtl )
 {
     const vxui_demo_command_deck_theme& theme = vxui_demo_command_deck_theme_tokens();
-    const vxui_label_cfg meta_cfg = vxui_demo_text_style( VXUI_DEMO_FONT_ROLE_BODY, 16.0f, theme.muted_text );
-    const vxui_value_cfg value_cfg = vxui_demo_value_style( VXUI_DEMO_FONT_ROLE_BODY, 16.0f, theme.muted_text, "%.0f" );
+    const vxui_label_cfg meta_cfg = vxui_demo_text_style( VXUI_DEMO_FONT_ROLE_BODY, 13.0f, theme.muted_text );
+    const vxui_value_cfg value_cfg = vxui_demo_value_style( VXUI_DEMO_FONT_ROLE_BODY, 13.0f, theme.muted_text, "%.0f" );
     const uint32_t summary_id = vxui_id( id );
     const std::string primary_id = std::string( id ) + ".row.primary";
-    const std::string secondary_id = std::string( id ) + ".row.secondary";
     const std::string locale_id = std::string( id ) + ".locale";
     const std::string prompts_id = std::string( id ) + ".prompts";
     const std::string screens_id = std::string( id ) + ".screens";
@@ -1170,32 +1175,23 @@ static void vxui_demo_emit_status_summary(
     CLAY( vxui__clay_id_from_hash( summary_id ), {
         .layout = {
             .sizing = { CLAY_SIZING_GROW( 0 ), CLAY_SIZING_FIT( 0 ) },
-            .padding = CLAY_PADDING_ALL( 10 ),
-            .childGap = VXUI_DEMO_ROW_GAP,
-            .layoutDirection = CLAY_TOP_TO_BOTTOM,
+            .padding = CLAY_PADDING_ALL( 6 ),
+            .childGap = 6,
+            .layoutDirection = CLAY_LEFT_TO_RIGHT,
         },
         .backgroundColor = vxui_demo_clay_color( theme.secondary_panel_fill ),
-        .cornerRadius = CLAY_CORNER_RADIUS( 10 ),
-        .border = vxui_demo_panel_border( theme.secondary_panel_border, 1 ),
+        .cornerRadius = CLAY_CORNER_RADIUS( 8 ),
     } ) {
         CLAY( vxui__clay_id_from_hash( vxui_id( primary_id.c_str() ) ), {
             .layout = {
                 .sizing = { CLAY_SIZING_GROW( 0 ), CLAY_SIZING_FIT( 0 ) },
-                .childGap = VXUI_DEMO_ROW_GAP,
+                .childGap = 6,
+                .childAlignment = { .y = CLAY_ALIGN_Y_CENTER },
                 .layoutDirection = vxui__resolve_dir( CLAY_LEFT_TO_RIGHT, rtl ),
             },
         } ) {
             vxui_demo_emit_compact_meta_row( ctx, locale_id.c_str(), "status.label.locale", locale_name_key, rtl, &meta_cfg );
             vxui_demo_emit_compact_meta_row( ctx, prompts_id.c_str(), "status.label.prompts", prompt_name_key, rtl, &meta_cfg );
-        }
-
-        CLAY( vxui__clay_id_from_hash( vxui_id( secondary_id.c_str() ) ), {
-            .layout = {
-                .sizing = { CLAY_SIZING_GROW( 0 ), CLAY_SIZING_FIT( 0 ) },
-                .childGap = VXUI_DEMO_ROW_GAP,
-                .layoutDirection = vxui__resolve_dir( CLAY_LEFT_TO_RIGHT, rtl ),
-            },
-        } ) {
             CLAY( vxui__clay_id_from_hash( vxui_id( screens_id.c_str() ) ), {
                 .layout = {
                     .sizing = { CLAY_SIZING_FIT( 0 ), CLAY_SIZING_FIT( 0 ) },
@@ -1991,6 +1987,60 @@ static void vxui_demo_shutdown_backend_test_fbo( vxui_demo_renderer* renderer )
     }
 }
 
+static bool vxui_demo_setup_shot_capture_fbo( vxui_demo_renderer* renderer )
+{
+    if ( !renderer || renderer->window_size.width == 0 || renderer->window_size.height == 0 ) {
+        return false;
+    }
+
+    GLint previous_texture = 0;
+    GLint previous_framebuffer = 0;
+    glGetIntegerv( GL_TEXTURE_BINDING_2D, &previous_texture );
+    glGetIntegerv( GL_FRAMEBUFFER_BINDING, &previous_framebuffer );
+
+    glGenFramebuffers( 1, &renderer->shot_capture_fbo );
+    glGenTextures( 1, &renderer->shot_capture_texture );
+    glBindTexture( GL_TEXTURE_2D, renderer->shot_capture_texture );
+    glTexImage2D( GL_TEXTURE_2D, 0, GL_RGBA8, renderer->window_size.width, renderer->window_size.height, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr );
+    glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE );
+    glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE );
+    glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST );
+    glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST );
+
+    glBindFramebuffer( GL_FRAMEBUFFER, renderer->shot_capture_fbo );
+    glFramebufferTexture2D( GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, renderer->shot_capture_texture, 0 );
+    const bool complete = glCheckFramebufferStatus( GL_FRAMEBUFFER ) == GL_FRAMEBUFFER_COMPLETE;
+
+    glBindTexture( GL_TEXTURE_2D, static_cast< GLuint >( previous_texture ) );
+    glBindFramebuffer( GL_FRAMEBUFFER, static_cast< GLuint >( previous_framebuffer ) );
+
+    if ( !complete ) {
+        vxui_demo_shutdown_shot_capture_fbo( renderer );
+        return false;
+    }
+
+    renderer->shot_capture_mode = true;
+    vxui_demo_gl_debug_label( renderer, GL_FRAMEBUFFER, renderer->shot_capture_fbo, "vxui.shot_capture.fbo" );
+    vxui_demo_gl_debug_label( renderer, GL_TEXTURE, renderer->shot_capture_texture, "vxui.shot_capture.texture" );
+    return true;
+}
+
+static void vxui_demo_shutdown_shot_capture_fbo( vxui_demo_renderer* renderer )
+{
+    if ( !renderer ) {
+        return;
+    }
+    if ( renderer->shot_capture_fbo ) {
+        glDeleteFramebuffers( 1, &renderer->shot_capture_fbo );
+        renderer->shot_capture_fbo = 0;
+    }
+    if ( renderer->shot_capture_texture ) {
+        glDeleteTextures( 1, &renderer->shot_capture_texture );
+        renderer->shot_capture_texture = 0;
+    }
+    renderer->shot_capture_mode = false;
+}
+
 static bool vxui_demo_readback_r8_texture( GLuint texture, int x, int y, int w, int h, uint8_t* out_pixels )
 {
     if ( texture == 0 || !out_pixels ) {
@@ -2727,6 +2777,7 @@ static void vxui_demo_shutdown_renderer( vxui_demo_renderer* renderer )
     if ( !renderer->cpu_atlas_textures.empty() ) {
         glDeleteTextures( ( GLsizei ) renderer->cpu_atlas_textures.size(), renderer->cpu_atlas_textures.data() );
     }
+    vxui_demo_shutdown_shot_capture_fbo( renderer );
     vxui_demo_shutdown_backend_test_fbo( renderer );
     ve_fontcache_shutdown( &renderer->cache );
 }
@@ -2864,7 +2915,7 @@ static void vxui_demo_render_fontcache_drawlist( vxui_demo_renderer* renderer, c
         } else if ( dcall.pass == VE_FONTCACHE_FRAMEBUFFER_PASS_TARGET || dcall.pass == VE_FONTCACHE_FRAMEBUFFER_PASS_TARGET_UNCACHED || dcall.pass == VE_FONTCACHE_FRAMEBUFFER_PASS_TARGET_CPU_CACHED ) {
             begin_pass_group( 2, "VEFC Target Text" );
             glUseProgram( renderer->fontcache_shader_draw_text );
-            GLuint target_fbo = renderer->backend_test_mode ? renderer->backend_target_fbo : 0;
+            GLuint target_fbo = renderer->backend_test_mode ? renderer->backend_target_fbo : ( renderer->shot_capture_mode ? renderer->shot_capture_fbo : 0u );
             glBindFramebuffer( GL_FRAMEBUFFER, target_fbo );
             glBlendFunc( GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA );
             glViewport( 0, 0, renderer->window_size.width, renderer->window_size.height );
@@ -3050,7 +3101,8 @@ static void vxui_demo_present_draw_list( vxui_demo_renderer* renderer, vxui_ctx*
     if ( !renderer || !list ) {
         return;
     }
-    glBindFramebuffer( GL_FRAMEBUFFER, 0 );
+    const GLuint target_fbo = renderer->shot_capture_mode ? renderer->shot_capture_fbo : 0u;
+    glBindFramebuffer( GL_FRAMEBUFFER, target_fbo );
     glViewport( 0, 0, renderer->window_size.width, renderer->window_size.height );
     glDisable( GL_SCISSOR_TEST );
     glEnable( GL_BLEND );
@@ -3067,6 +3119,24 @@ static void vxui_demo_present_draw_list( vxui_demo_renderer* renderer, vxui_ctx*
     vxui_demo_gl_debug_begin( renderer, "VXUI Draw List" );
     vxui_demo_render_draw_list( renderer, list );
     vxui_demo_gl_debug_end( renderer );
+    if ( renderer->shot_capture_mode && renderer->shot_capture_fbo ) {
+        GLint previous_read_framebuffer = 0;
+        GLint previous_draw_framebuffer = 0;
+        glGetIntegerv( GL_READ_FRAMEBUFFER_BINDING, &previous_read_framebuffer );
+        glGetIntegerv( GL_DRAW_FRAMEBUFFER_BINDING, &previous_draw_framebuffer );
+        glBindFramebuffer( GL_READ_FRAMEBUFFER, renderer->shot_capture_fbo );
+        glReadBuffer( GL_COLOR_ATTACHMENT0 );
+        glBindFramebuffer( GL_DRAW_FRAMEBUFFER, 0 );
+        glBlitFramebuffer(
+            0, 0,
+            static_cast< GLint >( renderer->window_size.width ), static_cast< GLint >( renderer->window_size.height ),
+            0, 0,
+            static_cast< GLint >( renderer->window_size.width ), static_cast< GLint >( renderer->window_size.height ),
+            GL_COLOR_BUFFER_BIT,
+            GL_NEAREST );
+        glBindFramebuffer( GL_READ_FRAMEBUFFER, static_cast< GLuint >( previous_read_framebuffer ) );
+        glBindFramebuffer( GL_DRAW_FRAMEBUFFER, static_cast< GLuint >( previous_draw_framebuffer ) );
+    }
     if ( ctx ) {
         vxui_flush_text( ctx );
     }
@@ -3235,6 +3305,52 @@ static bool vxui_demo_capture_backbuffer_png( const std::filesystem::path& path,
     return vxui_demo_write_png_rgba( path, width, height, flipped.data(), error, error_size );
 }
 
+static bool vxui_demo_capture_rgba_texture_png( GLuint texture, int width, int height, const std::filesystem::path& path, char* error, size_t error_size )
+{
+    if ( texture == 0 || width <= 0 || height <= 0 ) {
+        std::snprintf( error, error_size, "%s", "invalid shot capture texture" );
+        return false;
+    }
+
+    static GLuint readback_fbo = 0;
+    if ( readback_fbo == 0 ) {
+        glGenFramebuffers( 1, &readback_fbo );
+    }
+
+    std::vector< uint8_t > pixels( ( size_t ) width * ( size_t ) height * 4u );
+    GLint previous_read_framebuffer = 0;
+    glGetIntegerv( GL_READ_FRAMEBUFFER_BINDING, &previous_read_framebuffer );
+    glBindFramebuffer( GL_READ_FRAMEBUFFER, readback_fbo );
+    glFramebufferTexture2D( GL_READ_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, texture, 0 );
+    if ( glCheckFramebufferStatus( GL_READ_FRAMEBUFFER ) != GL_FRAMEBUFFER_COMPLETE ) {
+        glBindFramebuffer( GL_READ_FRAMEBUFFER, static_cast< GLuint >( previous_read_framebuffer ) );
+        std::snprintf( error, error_size, "%s", "shot capture framebuffer incomplete" );
+        return false;
+    }
+
+    while ( glGetError() != GL_NO_ERROR ) {
+    }
+    glReadBuffer( GL_COLOR_ATTACHMENT0 );
+    glPixelStorei( GL_PACK_ALIGNMENT, 1 );
+    glReadPixels( 0, 0, width, height, GL_BGRA, GL_UNSIGNED_BYTE, pixels.data() );
+    const GLenum read_error = glGetError();
+    glBindFramebuffer( GL_READ_FRAMEBUFFER, static_cast< GLuint >( previous_read_framebuffer ) );
+    if ( read_error != GL_NO_ERROR ) {
+        std::snprintf( error, error_size, "glReadPixels failed for shot capture texture (0x%x)", read_error );
+        return false;
+    }
+
+    const size_t row_stride = ( size_t ) width * 4u;
+    std::vector< uint8_t > flipped( pixels.size() );
+    for ( int y = 0; y < height; ++y ) {
+        const uint8_t* src = pixels.data() + ( size_t ) ( height - 1 - y ) * row_stride;
+        uint8_t* dst = flipped.data() + ( size_t ) y * row_stride;
+        std::memcpy( dst, src, row_stride );
+    }
+
+    return vxui_demo_write_png_rgba( path, width, height, flipped.data(), error, error_size );
+}
+
 static bool vxui_demo_button_edge( vxui_demo_app* app, vxui_demo_button button, bool down )
 {
     bool pressed = down && !app->button_prev[ button ];
@@ -3356,6 +3472,14 @@ int main( int argc, char** argv )
     ve_fontcache_init( &renderer.cache, true );
     if ( !vxui_demo_load_fonts( &renderer ) ) {
          std::fprintf( stderr, "Failed to initialize the VXUI demo renderer.\n" );
+         vxui_demo_shutdown_renderer( &renderer );
+         window.reset( nullptr );
+         manager->ShutDown();
+         return 1;
+     }
+
+    if ( shot_request.enabled && !vxui_demo_setup_shot_capture_fbo( &renderer ) ) {
+         std::fprintf( stderr, "Failed to initialize the VXUI demo shot capture surface.\n" );
          vxui_demo_shutdown_renderer( &renderer );
          window.reset( nullptr );
          manager->ShutDown();
@@ -3634,7 +3758,11 @@ int main( int argc, char** argv )
         glFinish();
 
         char capture_error[ 256 ] = {};
-        if ( !vxui_demo_capture_backbuffer_png( std::filesystem::path( shot_request.out_path ), ( int ) renderer.window_size.width, ( int ) renderer.window_size.height, capture_error, sizeof( capture_error ) ) ) {
+        const bool captured =
+            renderer.shot_capture_mode && renderer.shot_capture_texture
+            ? vxui_demo_capture_rgba_texture_png( renderer.shot_capture_texture, ( int ) renderer.window_size.width, ( int ) renderer.window_size.height, std::filesystem::path( shot_request.out_path ), capture_error, sizeof( capture_error ) )
+            : vxui_demo_capture_backbuffer_png( std::filesystem::path( shot_request.out_path ), ( int ) renderer.window_size.width, ( int ) renderer.window_size.height, capture_error, sizeof( capture_error ) );
+        if ( !captured ) {
             std::fprintf( stderr, "Failed to capture screenshot: %s\n", capture_error );
             Clay_SetCurrentContext( nullptr );
             if ( !app.watched_seq_path.empty() ) {
@@ -3991,14 +4119,14 @@ static vxui_menu_style vxui_demo_menu_style_form_deck( float label_lane_width )
     style.title_font_id = VXUI_DEMO_FONT_ROLE_SECTION;
     style.badge_font_id = VXUI_DEMO_FONT_ROLE_BODY;
     style.label_lane_width = label_lane_width;
-    style.body_font_size = 22.0f;
-    style.secondary_font_size = 18.0f;
-    style.title_font_size = 28.0f;
-    style.row_height = 48.0f;
-    style.row_gap = 8.0f;
-    style.section_gap = 14.0f;
-    style.padding_x = 18.0f;
-    style.padding_y = 16.0f;
+    style.body_font_size = 18.0f;
+    style.secondary_font_size = 15.0f;
+    style.title_font_size = 24.0f;
+    style.row_height = 40.0f;
+    style.row_gap = 4.0f;
+    style.section_gap = 10.0f;
+    style.padding_x = 14.0f;
+    style.padding_y = 10.0f;
     vxui_demo_apply_form_menu_theme( style );
     return style;
 }
@@ -4610,13 +4738,22 @@ static void vxui_demo_render_settings_screen( vxui_demo_app* app, vxui_ctx* ctx,
     const vxui_demo_settings_layout_spec layout = vxui_demo_resolve_settings_layout( viewport_width, layout_surface_max_height, ctx->locale );
     const vxui_demo_surface_metrics& surface_metrics = layout.surface;
     vxui_menu_style form_style = vxui_demo_menu_style_form_deck( surface_metrics.label_lane_width );
+    form_style.body_font_size = 16.0f;
+    form_style.secondary_font_size = 13.0f;
+    form_style.title_font_size = 20.0f;
+    form_style.badge_font_size = 11.0f;
+    form_style.row_height = 36.0f;
+    form_style.row_gap = 3.0f;
+    form_style.section_gap = 8.0f;
+    form_style.padding_x = 12.0f;
+    form_style.padding_y = 8.0f;
 
     vxui_demo_emit_screen_surface( ctx, "settings", "settings.surface", surface_metrics.surface_width, layout.surface_max_height, rtl, background_scanline, [&]() {
         VXUI( ctx, "settings.header", {
             .layout = {
                 .sizing = { CLAY_SIZING_GROW( 0 ), CLAY_SIZING_FIT( 0 ) },
-                .padding = CLAY_PADDING_ALL( 18 ),
-                .childGap = 8,
+                .padding = CLAY_PADDING_ALL( 12 ),
+                .childGap = 6,
                 .layoutDirection = CLAY_TOP_TO_BOTTOM,
             },
             .backgroundColor = vxui_demo_clay_color( theme.hero_surface_fill ),
@@ -4625,12 +4762,12 @@ static void vxui_demo_render_settings_screen( vxui_demo_app* app, vxui_ctx* ctx,
         } ) {
             VXUI_LABEL( ctx, "menu.settings", ( vxui_label_cfg ) {
                 .font_id = VXUI_DEMO_FONT_ROLE_TITLE,
-                .font_size = 48.0f,
+                .font_size = 40.0f,
                 .color = theme.title_text,
             } );
             VXUI_LABEL( ctx, "Carry-forward shell controls and layout-safe menu scrolling.", ( vxui_label_cfg ) {
                 .font_id = VXUI_DEMO_FONT_ROLE_BODY,
-                .font_size = 20.0f,
+                .font_size = 16.0f,
                 .color = theme.accent_cool,
             } );
         }
@@ -4677,9 +4814,10 @@ static void vxui_demo_render_settings_screen( vxui_demo_app* app, vxui_ctx* ctx,
         VXUI( ctx, "settings.footer", {
             .layout = {
                 .sizing = { CLAY_SIZING_GROW( 0 ), CLAY_SIZING_FIT( 0 ) },
-                .padding = CLAY_PADDING_ALL( 18 ),
-                .childGap = VXUI_DEMO_ROW_GAP,
-                .layoutDirection = CLAY_TOP_TO_BOTTOM,
+                .padding = CLAY_PADDING_ALL( 8 ),
+                .childGap = 6,
+                .childAlignment = { .y = CLAY_ALIGN_Y_CENTER },
+                .layoutDirection = vxui__resolve_dir( CLAY_LEFT_TO_RIGHT, rtl ),
             },
             .backgroundColor = vxui_demo_clay_color( theme.utility_fill ),
             .cornerRadius = CLAY_CORNER_RADIUS( 12 ),
@@ -4694,7 +4832,7 @@ static void vxui_demo_render_settings_screen( vxui_demo_app* app, vxui_ctx* ctx,
                 }, control_height );
             } );
             vxui_demo_emit_footer_action_bar( ctx, "settings.footer.prompts", rtl, [&]() {
-                const vxui_label_cfg prompt_cfg = vxui_demo_text_style( VXUI_DEMO_FONT_ROLE_BODY, 18.0f, theme.utility_text );
+                const vxui_label_cfg prompt_cfg = vxui_demo_text_style( VXUI_DEMO_FONT_ROLE_BODY, 15.0f, theme.utility_text );
                 vxui_demo_emit_prompt_pair( ctx, "settings.prompt.confirm", "action.confirm", "menu.confirm", &prompt_cfg );
                 vxui_demo_emit_prompt_pair( ctx, "settings.prompt.cancel", "action.cancel", "menu.cancel", &prompt_cfg );
             } );

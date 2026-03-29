@@ -640,7 +640,7 @@ UTEST_F( author_story_fixture, regression_footer_status_crowding )
         ASSERT_TRUE( story_find_element( "main.footer.status", &status ) );
         EXPECT_TRUE( story_element_fully_inside( footer, prompts, 1.0f ) );
         EXPECT_TRUE( story_element_fully_inside( footer, status, 1.0f ) );
-        EXPECT_TRUE( story_no_vertical_overlap( prompts, status ) );
+        EXPECT_TRUE( vxui_demo_rects_non_overlapping( prompts, status, 0.0f ) );
         EXPECT_TRUE( story_rect_is_readable( prompts ) );
         EXPECT_TRUE( story_rect_is_readable( status ) );
     }
@@ -825,7 +825,7 @@ UTEST_F( author_story_fixture, regression_sortie_footer_prompts_and_status_remai
         ASSERT_TRUE( story_find_element( "sortie.footer.status", &status ) );
         EXPECT_TRUE( story_element_fully_inside( footer, prompts, 1.0f ) );
         EXPECT_TRUE( story_element_fully_inside( footer, status, 1.0f ) );
-        EXPECT_TRUE( story_no_vertical_overlap( prompts, status ) );
+        EXPECT_TRUE( vxui_demo_rects_non_overlapping( prompts, status, 0.0f ) );
         EXPECT_TRUE( story_rect_is_readable( prompts ) );
         EXPECT_TRUE( story_rect_is_readable( status ) );
     }

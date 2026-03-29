@@ -47,18 +47,18 @@ inline const vxui_demo_command_deck_theme& vxui_demo_command_deck_theme_tokens()
     static constexpr vxui_demo_command_deck_theme theme = {
         .app_background_base = { 7, 11, 19, 255 },
         .app_background_accent = { 86, 124, 164, 52 },
-        .hero_surface_fill = { 20, 31, 49, 250 },
-        .hero_surface_border = { 82, 116, 152, 184 },
+        .hero_surface_fill = { 23, 34, 52, 244 },
+        .hero_surface_border = { 67, 92, 124, 120 },
         .primary_panel_fill = { 16, 27, 43, 248 },
-        .primary_panel_border = { 74, 104, 140, 176 },
-        .secondary_panel_fill = { 20, 33, 52, 238 },
-        .secondary_panel_border = { 60, 89, 122, 138 },
-        .utility_fill = { 13, 22, 35, 250 },
-        .utility_border = { 90, 124, 160, 176 },
-        .focused_row_fill = { 56, 103, 142, 252 },
-        .focused_row_border = { 181, 236, 247, 255 },
-        .passive_row_fill = { 18, 29, 46, 238 },
-        .passive_row_border = { 82, 110, 144, 136 },
+        .primary_panel_border = { 68, 94, 126, 148 },
+        .secondary_panel_fill = { 19, 31, 48, 244 },
+        .secondary_panel_border = { 54, 79, 108, 110 },
+        .utility_fill = { 12, 20, 32, 244 },
+        .utility_border = { 74, 102, 132, 116 },
+        .focused_row_fill = { 68, 110, 145, 255 },
+        .focused_row_border = { 176, 229, 244, 248 },
+        .passive_row_fill = { 13, 21, 34, 245 },
+        .passive_row_border = { 66, 90, 118, 108 },
         .badge_fill = { 176, 132, 56, 246 },
         .badge_text = { 255, 244, 214, 255 },
         .title_text = { 245, 248, 255, 255 },
@@ -70,16 +70,16 @@ inline const vxui_demo_command_deck_theme& vxui_demo_command_deck_theme_tokens()
         .warning_text = { 255, 214, 156, 255 },
         .success_text = { 164, 220, 190, 255 },
         .alert_text = { 232, 130, 130, 255 },
-        .action_fill = { 34, 56, 84, 248 },
-        .action_border = { 128, 188, 215, 224 },
+        .action_fill = { 27, 46, 70, 248 },
+        .action_border = { 115, 170, 198, 196 },
         .action_text = { 231, 239, 248, 255 },
         .stat_track = { 28, 43, 64, 255 },
         .stat_fill = { 121, 214, 186, 255 },
         .disabled_fill = { 16, 23, 32, 184 },
         .disabled_text = { 113, 125, 143, 255 },
         .surface_scanline_alpha = 0.024f,
-        .title_focus_decor_alpha = 0.12f,
-        .form_focus_decor_alpha = 0.10f,
+        .title_focus_decor_alpha = 0.10f,
+        .form_focus_decor_alpha = 0.08f,
     };
     return theme;
 }
@@ -124,12 +124,12 @@ inline vxui_value_cfg vxui_demo_value_style( uint32_t font_id, float font_size, 
 inline void vxui_demo_apply_title_menu_theme( vxui_menu_style& style )
 {
     const vxui_demo_command_deck_theme& theme = vxui_demo_command_deck_theme_tokens();
-    style.corner_radius = 11.0f;
-    style.border_width = 2.0f;
-    style.badge_padding_x = 10.0f;
-    style.badge_padding_y = 4.0f;
+    style.corner_radius = 9.0f;
+    style.border_width = 1.0f;
+    style.badge_padding_x = 8.0f;
+    style.badge_padding_y = 3.0f;
     style.focus_decor = VXUI_MENU_FOCUS_DECOR_GLOW;
-    style.focus_decor_padding = 4.0f;
+    style.focus_decor_padding = 3.0f;
     style.focus_decor_alpha = theme.title_focus_decor_alpha;
     style.panel_fill_color = theme.primary_panel_fill;
     style.row_fill_color = theme.passive_row_fill;
@@ -154,12 +154,12 @@ inline void vxui_demo_apply_title_menu_theme( vxui_menu_style& style )
 inline void vxui_demo_apply_form_menu_theme( vxui_menu_style& style )
 {
     const vxui_demo_command_deck_theme& theme = vxui_demo_command_deck_theme_tokens();
-    style.corner_radius = 10.0f;
-    style.border_width = 2.0f;
-    style.badge_padding_x = 10.0f;
-    style.badge_padding_y = 4.0f;
+    style.corner_radius = 9.0f;
+    style.border_width = 1.0f;
+    style.badge_padding_x = 8.0f;
+    style.badge_padding_y = 3.0f;
     style.focus_decor = VXUI_MENU_FOCUS_DECOR_GLOW;
-    style.focus_decor_padding = 3.0f;
+    style.focus_decor_padding = 2.0f;
     style.focus_decor_alpha = theme.form_focus_decor_alpha;
     style.panel_fill_color = theme.primary_panel_fill;
     style.row_fill_color = theme.passive_row_fill;

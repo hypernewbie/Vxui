@@ -21,6 +21,20 @@ typedef enum vxui_menu_value_lane_mode
     VXUI_MENU_VALUE_LANE_FIT = 2,
 } vxui_menu_value_lane_mode;
 
+typedef enum vxui_menu_wrap_mode
+{
+    VXUI_MENU_WRAP_DEFAULT = 0,
+    VXUI_MENU_WRAP_FORCE_OFF = 1,
+    VXUI_MENU_WRAP_FORCE_ON = 2,
+} vxui_menu_wrap_mode;
+
+typedef enum vxui_menu_focus_decor
+{
+    VXUI_MENU_FOCUS_DECOR_NONE = 0,
+    VXUI_MENU_FOCUS_DECOR_GLOW = 1,
+    VXUI_MENU_FOCUS_DECOR_PULSE = 2,
+} vxui_menu_focus_decor;
+
 typedef struct vxui_menu_state
 {
     float scroll_current;
@@ -53,6 +67,7 @@ typedef struct vxui_menu_row_cfg
     uint32_t font_id;
     float font_size;
     vxui_color text_color;
+    vxui_menu_wrap_mode wrap_mode;
     bool hidden;
     bool disabled;
 } vxui_menu_row_cfg;
@@ -97,6 +112,7 @@ typedef struct vxui_menu_style
     float prompt_gap;
     float scroll_stiffness;
     float scroll_damping;
+    bool option_wrap_by_default;
     uint32_t body_font_id;
     uint32_t title_font_id;
     uint32_t badge_font_id;
@@ -104,9 +120,9 @@ typedef struct vxui_menu_style
     float secondary_font_size;
     float title_font_size;
     float badge_font_size;
-    uint32_t focus_trait_id;
-    float focus_trait_padding;
-    float focus_trait_alpha;
+    vxui_menu_focus_decor focus_decor;
+    float focus_decor_padding;
+    float focus_decor_alpha;
     vxui_color panel_fill_color;
     vxui_color row_fill_color;
     vxui_color row_focus_fill_color;
@@ -174,6 +190,7 @@ typedef struct vxui_menu__scope
     vxui_menu_cfg cfg;
     uint32_t viewport_id;
     uint32_t content_id;
+    uint32_t focused_row_id;
     int row_count;
     int focused_row_index;
 } vxui_menu__scope;
@@ -281,11 +298,11 @@ static vxui_menu_style vxui_menu__sanitize_style( vxui_menu_style style )
     if ( style.badge_font_size <= 0.0f ) {
         style.badge_font_size = defaults.badge_font_size;
     }
-    if ( style.focus_trait_padding <= 0.0f ) {
-        style.focus_trait_padding = defaults.focus_trait_padding;
+    if ( style.focus_decor_padding <= 0.0f ) {
+        style.focus_decor_padding = defaults.focus_decor_padding;
     }
-    if ( style.focus_trait_alpha <= 0.0f ) {
-        style.focus_trait_alpha = defaults.focus_trait_alpha;
+    if ( style.focus_decor_alpha <= 0.0f ) {
+        style.focus_decor_alpha = defaults.focus_decor_alpha;
     }
 
     if ( style.panel_fill_color.a == 0 ) style.panel_fill_color = defaults.panel_fill_color;
@@ -361,35 +378,35 @@ static void vxui_menu__emit_text_leaf( vxui_ctx* ctx, uint32_t owner_id, const c
     }
 }
 
-static void vxui_menu__attach_focus_trait( vxui_ctx* ctx, uint32_t row_id, const vxui_menu_style* style )
+static void vxui_menu__attach_focus_decor( vxui_ctx* ctx, uint32_t row_id, const vxui_menu_style* style )
 {
-    if ( !ctx || !style || style->focus_trait_id == 0 ) {
+    if ( !ctx || !style ) {
         return;
     }
 
     uint32_t prev_decl_id = ctx->current_decl_id;
     ctx->current_decl_id = row_id;
 
-    switch ( style->focus_trait_id ) {
-        case VXUI_TRAIT_GLOW: {
+    switch ( style->focus_decor ) {
+        case VXUI_MENU_FOCUS_DECOR_NONE:
+            break;
+
+        case VXUI_MENU_FOCUS_DECOR_GLOW: {
             vxui__trait_glow_params params = {
-                .padding = style->focus_trait_padding,
-                .alpha = style->focus_trait_alpha,
+                .padding = style->focus_decor_padding,
+                .alpha = style->focus_decor_alpha,
             };
-            vxui__attach_trait( ctx, style->focus_trait_id, &params, sizeof( params ) );
+            vxui__attach_trait( ctx, VXUI_TRAIT_GLOW, &params, sizeof( params ) );
         } break;
 
-        case VXUI_TRAIT_PULSE: {
+        case VXUI_MENU_FOCUS_DECOR_PULSE: {
             vxui__trait_pulse_params params = {
                 .speed = 2.0f,
                 .scale = 0.05f,
-                .alpha = style->focus_trait_alpha,
+                .alpha = style->focus_decor_alpha,
             };
-            vxui__attach_trait( ctx, style->focus_trait_id, &params, sizeof( params ) );
+            vxui__attach_trait( ctx, VXUI_TRAIT_PULSE, &params, sizeof( params ) );
         } break;
-
-        default:
-            break;
     }
 
     ctx->current_decl_id = prev_decl_id;
@@ -431,7 +448,7 @@ static void vxui_menu__begin_common_row( vxui_menu__scope* scope, uint32_t row_i
     } );
 
     if ( focused ) {
-        vxui_menu__attach_focus_trait( scope->ctx, row_id, style );
+        vxui_menu__attach_focus_decor( scope->ctx, row_id, style );
     }
 }
 
@@ -622,10 +639,28 @@ static void vxui_menu__track_row( vxui_menu__scope* scope, uint32_t row_id )
     if ( scope->state ) {
         scope->state->last_emitted_row_count = scope->row_count;
         if ( scope->ctx->focused_id == row_id ) {
-            scope->state->last_focused_row_id = row_id;
+            scope->focused_row_id = row_id;
             scope->focused_row_index = row_index;
         }
     }
+}
+
+static bool vxui_menu__option_wrap_enabled( const vxui_menu_style* style, const vxui_menu_row_cfg* row_cfg )
+{
+    if ( row_cfg ) {
+        switch ( row_cfg->wrap_mode ) {
+            case VXUI_MENU_WRAP_FORCE_OFF:
+                return false;
+
+            case VXUI_MENU_WRAP_FORCE_ON:
+                return true;
+
+            case VXUI_MENU_WRAP_DEFAULT:
+            default:
+                break;
+        }
+    }
+    return style ? style->option_wrap_by_default : true;
 }
 
 vxui_menu_style vxui_menu_style_form( void )
@@ -650,13 +685,14 @@ vxui_menu_style vxui_menu_style_form( void )
         .prompt_gap = 8.0f,
         .scroll_stiffness = VXUI_DEFAULT_STIFFNESS,
         .scroll_damping = VXUI_DEFAULT_DAMPING,
+        .option_wrap_by_default = true,
         .body_font_size = 24.0f,
         .secondary_font_size = 18.0f,
         .title_font_size = 30.0f,
         .badge_font_size = 16.0f,
-        .focus_trait_id = VXUI_TRAIT_GLOW,
-        .focus_trait_padding = 4.0f,
-        .focus_trait_alpha = 0.24f,
+        .focus_decor = VXUI_MENU_FOCUS_DECOR_GLOW,
+        .focus_decor_padding = 4.0f,
+        .focus_decor_alpha = 0.24f,
         .panel_fill_color = { 12, 16, 24, 192 },
         .row_fill_color = { 22, 28, 40, 220 },
         .row_focus_fill_color = { 32, 46, 68, 240 },
@@ -691,7 +727,7 @@ vxui_menu_style vxui_menu_style_br_panel( void )
     style.row_border_color = { 76, 108, 144, 144 };
     style.row_focus_border_color = { 156, 214, 255, 255 };
     style.section_text_color = { 196, 220, 255, 255 };
-    style.focus_trait_alpha = 0.30f;
+    style.focus_decor_alpha = 0.30f;
     return style;
 }
 
@@ -711,8 +747,8 @@ vxui_menu_style vxui_menu_style_br_title( void )
     style.title_font_size = 40.0f;
     style.body_font_size = 28.0f;
     style.secondary_font_size = 20.0f;
-    style.focus_trait_id = VXUI_TRAIT_PULSE;
-    style.focus_trait_alpha = 0.16f;
+    style.focus_decor = VXUI_MENU_FOCUS_DECOR_PULSE;
+    style.focus_decor_alpha = 0.16f;
     style.row_fill_color = { 18, 22, 34, 150 };
     style.row_focus_fill_color = { 42, 60, 88, 220 };
     style.row_border_color = { 64, 90, 128, 96 };
@@ -762,6 +798,7 @@ void vxui_menu_begin( vxui_ctx* ctx, vxui_menu_state* state, const char* id, vxu
     scope->cfg = cfg;
     scope->viewport_id = vxui_idi( id, 1 );
     scope->content_id = vxui_idi( id, 2 );
+    scope->focused_row_id = 0;
     scope->focused_row_index = -1;
 
     state->last_emitted_row_count = 0;
@@ -817,9 +854,12 @@ void vxui_menu_end( vxui_ctx* ctx, vxui_menu_state* state )
         vxui_rect focus_bounds = {};
         vxui_rect viewport_bounds = {};
         vxui_rect content_bounds = {};
-        bool have_focus_bounds = vxui_find_anim_bounds( ctx, ctx->focused_id, &focus_bounds ) && focus_bounds.w > 0.0f && focus_bounds.h > 0.0f;
-        if ( !have_focus_bounds && ctx->focused_id != 0 ) {
-            Clay_ElementData focused = Clay_GetElementData( vxui__clay_id_from_hash( ctx->focused_id ) );
+        bool have_focus_bounds = false;
+        if ( scope->focused_row_id != 0u ) {
+            have_focus_bounds = vxui_find_anim_bounds( ctx, scope->focused_row_id, &focus_bounds ) && focus_bounds.w > 0.0f && focus_bounds.h > 0.0f;
+        }
+        if ( !have_focus_bounds && scope->focused_row_id != 0u ) {
+            Clay_ElementData focused = Clay_GetElementData( vxui__clay_id_from_hash( scope->focused_row_id ) );
             if ( focused.found ) {
                 focus_bounds = vxui__rect_from_clay_box( focused.boundingBox );
                 have_focus_bounds = focus_bounds.w > 0.0f && focus_bounds.h > 0.0f;
@@ -857,7 +897,7 @@ void vxui_menu_end( vxui_ctx* ctx, vxui_menu_state* state )
                     state->scroll_target = max_target;
                 }
             }
-        } else if ( scope->focused_row_index >= 0 ) {
+        } else if ( scope->focused_row_id != 0u && scope->focused_row_index >= 0 ) {
             float viewport_height = scope->cfg.viewport_height > 0.0f ? scope->cfg.viewport_height : 0.0f;
             float margin = scope->style.padding_y + scope->style.row_gap;
             float row_stride = scope->style.row_height + scope->style.row_gap;
@@ -884,7 +924,7 @@ void vxui_menu_end( vxui_ctx* ctx, vxui_menu_state* state )
         }
     }
 
-    state->last_focused_row_id = ctx->focused_id;
+    state->last_focused_row_id = scope->focused_row_id;
     state->last_emitted_row_count = scope->row_count;
     vxui_menu__scope_count -= 1;
 }
@@ -962,8 +1002,7 @@ void vxui_menu_option( vxui_ctx* ctx, vxui_menu_state* state, const char* id, co
 
     uint32_t row_id = vxui_menu__row_id( scope, id );
     bool interactive = !row_cfg.disabled;
-    vxui_option_cfg zero_option_cfg = {};
-    bool wrap = option_cfg.wrap || std::memcmp( &option_cfg, &zero_option_cfg, sizeof( option_cfg ) ) == 0;
+    bool wrap = vxui_menu__option_wrap_enabled( &scope->style, &row_cfg );
 
     vxui__register_decl(
         ctx,

@@ -12,6 +12,12 @@
 
 static_assert( std::is_standard_layout_v< vxui_menu_state > );
 static_assert( std::is_trivially_copyable_v< vxui_menu_state > );
+static_assert( std::is_enum_v< vxui_menu_wrap_mode > );
+static_assert( std::is_enum_v< vxui_menu_focus_decor > );
+static_assert( VXUI_MENU_WRAP_DEFAULT == 0 );
+static_assert( VXUI_MENU_WRAP_FORCE_OFF != VXUI_MENU_WRAP_FORCE_ON );
+static_assert( VXUI_MENU_FOCUS_DECOR_NONE == 0 );
+static_assert( VXUI_MENU_FOCUS_DECOR_GLOW != VXUI_MENU_FOCUS_DECOR_PULSE );
 
 typedef struct menu_fixture
 {
@@ -72,6 +78,39 @@ static void vxui__menu_slider_changed( vxui_ctx* ctx, float value, void* userdat
 static uint32_t vxui__menu_row_id( const char* menu_id, const char* row_id )
 {
     return vxui_idi( menu_id, ( int ) vxui_id( row_id ) );
+}
+
+static const vxui_anim_state* vxui__menu_find_anim_state( const vxui_ctx* ctx, uint32_t id )
+{
+    if ( !ctx || !ctx->anim_slots || ctx->anim_capacity <= 0 ) {
+        return nullptr;
+    }
+
+    for ( int i = 0; i < ctx->anim_capacity; ++i ) {
+        if ( ctx->anim_slots[ i ].occupied && ctx->anim_slots[ i ].state.id == id ) {
+            return &ctx->anim_slots[ i ].state;
+        }
+    }
+    return nullptr;
+}
+
+static int vxui__menu_count_focus_glow_rects( const vxui_draw_list* list )
+{
+    if ( !list ) {
+        return 0;
+    }
+
+    int count = 0;
+    for ( int i = 0; i < list->length; ++i ) {
+        const vxui_cmd* cmd = &list->commands[ i ];
+        if ( cmd->type != VXUI_CMD_RECT_ROUNDED ) {
+            continue;
+        }
+        if ( cmd->rect_rounded.color.r == 80 && cmd->rect_rounded.color.g == 200 && cmd->rect_rounded.color.b == 255 && cmd->rect_rounded.color.a > 0 ) {
+            count += 1;
+        }
+    }
+    return count;
 }
 
 UTEST_F_SETUP( menu_fixture )
@@ -178,6 +217,125 @@ UTEST_F( menu_fixture, option_rows_change_once_per_actual_mutation )
     vxui_end( &utest_fixture->ctx );
 
     EXPECT_EQ( index, 2 );
+    EXPECT_EQ( utest_fixture->option_change_count, 1 );
+}
+
+UTEST_F( menu_fixture, option_wrap_default_is_stable_with_callbacks )
+{
+    const char* options[] = { "difficulty.easy", "difficulty.normal", "difficulty.hard" };
+    int index = 2;
+    uint32_t row_id = vxui__menu_row_id( "menu", "difficulty" );
+    vxui_menu_style style = vxui_menu_style_form();
+
+    vxui_begin( &utest_fixture->ctx, 0.016f );
+    vxui_set_focus( &utest_fixture->ctx, row_id );
+    vxui_input_nav( &utest_fixture->ctx, VXUI_DIR_RIGHT );
+    VXUI( &utest_fixture->ctx, "root", {} ) {
+        vxui_menu_begin( &utest_fixture->ctx, &utest_fixture->state, "menu", ( vxui_menu_cfg ) {
+            .style = &style,
+            .viewport_height = 180.0f,
+        } );
+        vxui_menu_option(
+            &utest_fixture->ctx,
+            &utest_fixture->state,
+            "difficulty",
+            "menu.mode",
+            &index,
+            options,
+            3,
+            ( vxui_menu_row_cfg ) { 0 },
+            ( vxui_option_cfg ) {
+                .nav_up = vxui_id( "nav.up" ),
+                .nav_down = vxui_id( "nav.down" ),
+                .nav_left = vxui_id( "nav.left" ),
+                .nav_right = vxui_id( "nav.right" ),
+                .on_change = vxui__menu_option_changed,
+                .userdata = &utest_fixture->option_change_count,
+            } );
+        vxui_menu_end( &utest_fixture->ctx, &utest_fixture->state );
+    }
+    vxui_end( &utest_fixture->ctx );
+
+    EXPECT_TRUE( style.option_wrap_by_default );
+    EXPECT_EQ( index, 0 );
+    EXPECT_EQ( utest_fixture->option_change_count, 1 );
+}
+
+UTEST_F( menu_fixture, option_wrap_can_be_forced_off )
+{
+    const char* options[] = { "difficulty.easy", "difficulty.normal", "difficulty.hard" };
+    int index = 2;
+    uint32_t row_id = vxui__menu_row_id( "menu", "difficulty" );
+    vxui_menu_style style = vxui_menu_style_form();
+
+    vxui_begin( &utest_fixture->ctx, 0.016f );
+    vxui_set_focus( &utest_fixture->ctx, row_id );
+    vxui_input_nav( &utest_fixture->ctx, VXUI_DIR_RIGHT );
+    VXUI( &utest_fixture->ctx, "root", {} ) {
+        vxui_menu_begin( &utest_fixture->ctx, &utest_fixture->state, "menu", ( vxui_menu_cfg ) {
+            .style = &style,
+            .viewport_height = 180.0f,
+        } );
+        vxui_menu_option(
+            &utest_fixture->ctx,
+            &utest_fixture->state,
+            "difficulty",
+            "menu.mode",
+            &index,
+            options,
+            3,
+            ( vxui_menu_row_cfg ) {
+                .wrap_mode = VXUI_MENU_WRAP_FORCE_OFF,
+            },
+            ( vxui_option_cfg ) {
+                .on_change = vxui__menu_option_changed,
+                .userdata = &utest_fixture->option_change_count,
+            } );
+        vxui_menu_end( &utest_fixture->ctx, &utest_fixture->state );
+    }
+    vxui_end( &utest_fixture->ctx );
+
+    EXPECT_EQ( index, 2 );
+    EXPECT_EQ( utest_fixture->option_change_count, 0 );
+}
+
+UTEST_F( menu_fixture, option_wrap_can_be_forced_on )
+{
+    const char* options[] = { "difficulty.easy", "difficulty.normal", "difficulty.hard" };
+    int index = 2;
+    uint32_t row_id = vxui__menu_row_id( "menu", "difficulty" );
+    vxui_menu_style style = vxui_menu_style_form();
+    style.option_wrap_by_default = false;
+
+    vxui_begin( &utest_fixture->ctx, 0.016f );
+    vxui_set_focus( &utest_fixture->ctx, row_id );
+    vxui_input_nav( &utest_fixture->ctx, VXUI_DIR_RIGHT );
+    VXUI( &utest_fixture->ctx, "root", {} ) {
+        vxui_menu_begin( &utest_fixture->ctx, &utest_fixture->state, "menu", ( vxui_menu_cfg ) {
+            .style = &style,
+            .viewport_height = 180.0f,
+        } );
+        vxui_menu_option(
+            &utest_fixture->ctx,
+            &utest_fixture->state,
+            "difficulty",
+            "menu.mode",
+            &index,
+            options,
+            3,
+            ( vxui_menu_row_cfg ) {
+                .wrap_mode = VXUI_MENU_WRAP_FORCE_ON,
+            },
+            ( vxui_option_cfg ) {
+                .on_change = vxui__menu_option_changed,
+                .userdata = &utest_fixture->option_change_count,
+            } );
+        vxui_menu_end( &utest_fixture->ctx, &utest_fixture->state );
+    }
+    vxui_end( &utest_fixture->ctx );
+
+    EXPECT_FALSE( style.option_wrap_by_default );
+    EXPECT_EQ( index, 0 );
     EXPECT_EQ( utest_fixture->option_change_count, 1 );
 }
 
@@ -328,7 +486,7 @@ UTEST_F( menu_fixture, br_title_and_panel_presets_emit_distinct_layouts )
     EXPECT_GT( title_x, panel_x );
 }
 
-UTEST_F( menu_fixture, auto_scroll_updates_target_when_focus_leaves_viewport )
+UTEST_F( menu_fixture, auto_scroll_tracks_focus_inside_current_menu )
 {
     const vxui_menu_style style = vxui_menu_style_compact();
     uint32_t target_row_id = vxui__menu_row_id( "menu", "row.7" );
@@ -352,6 +510,50 @@ UTEST_F( menu_fixture, auto_scroll_updates_target_when_focus_leaves_viewport )
     vxui_end( &utest_fixture->ctx );
 
     EXPECT_GT( utest_fixture->state.scroll_target, 0.0f );
+    EXPECT_EQ( utest_fixture->state.last_focused_row_id, target_row_id );
+}
+
+UTEST_F( menu_fixture, auto_scroll_ignores_focus_outside_current_menu )
+{
+    const vxui_menu_style style = vxui_menu_style_compact();
+    vxui_menu_state other_state = {};
+    uint32_t other_menu_row_id = vxui__menu_row_id( "menu_b", "row.7" );
+
+    vxui_begin( &utest_fixture->ctx, 0.016f );
+    vxui_set_focus( &utest_fixture->ctx, other_menu_row_id );
+    VXUI( &utest_fixture->ctx, "root", {} ) {
+        vxui_menu_begin( &utest_fixture->ctx, &utest_fixture->state, "menu_a", ( vxui_menu_cfg ) {
+            .style = &style,
+            .viewport_height = 96.0f,
+        } );
+        for ( int i = 0; i < 8; ++i ) {
+            char row_id[ 16 ] = {};
+            std::snprintf( row_id, sizeof( row_id ), "row.%d", i );
+            vxui_menu_action( &utest_fixture->ctx, &utest_fixture->state, row_id, "menu.start", vxui__menu_action, ( vxui_menu_row_cfg ) { 0 }, ( vxui_action_cfg ) {
+                .userdata = &utest_fixture->action_count,
+            } );
+        }
+        vxui_menu_end( &utest_fixture->ctx, &utest_fixture->state );
+
+        vxui_menu_begin( &utest_fixture->ctx, &other_state, "menu_b", ( vxui_menu_cfg ) {
+            .style = &style,
+            .viewport_height = 96.0f,
+        } );
+        for ( int i = 0; i < 8; ++i ) {
+            char row_id[ 16 ] = {};
+            std::snprintf( row_id, sizeof( row_id ), "row.%d", i );
+            vxui_menu_action( &utest_fixture->ctx, &other_state, row_id, "menu.start", vxui__menu_action, ( vxui_menu_row_cfg ) { 0 }, ( vxui_action_cfg ) {
+                .userdata = &utest_fixture->action_count,
+            } );
+        }
+        vxui_menu_end( &utest_fixture->ctx, &other_state );
+    }
+    vxui_end( &utest_fixture->ctx );
+
+    EXPECT_EQ( utest_fixture->state.scroll_target, 0.0f );
+    EXPECT_EQ( utest_fixture->state.last_focused_row_id, 0u );
+    EXPECT_GT( other_state.scroll_target, 0.0f );
+    EXPECT_EQ( other_state.last_focused_row_id, other_menu_row_id );
 }
 
 UTEST_F( menu_fixture, rtl_swaps_label_and_value_lanes )
@@ -404,4 +606,67 @@ UTEST_F( menu_fixture, menu_rows_publish_anim_bounds_and_badges )
     EXPECT_GT( bounds.w, 0.0f );
     EXPECT_GT( bounds.h, 0.0f );
     EXPECT_TRUE( vxui_layout_helpers::find_text_pos( &list, "NEW", nullptr ) );
+}
+
+UTEST_F( menu_fixture, focus_decor_public_api_matches_supported_modes )
+{
+    uint32_t none_row_id = vxui__menu_row_id( "none_menu", "settings" );
+    uint32_t pulse_row_id = vxui__menu_row_id( "pulse_menu", "settings" );
+    vxui_menu_style none_style = vxui_menu_style_form();
+    vxui_menu_style glow_style = vxui_menu_style_br_panel();
+    vxui_menu_style pulse_style = vxui_menu_style_br_title();
+    none_style.focus_decor = VXUI_MENU_FOCUS_DECOR_NONE;
+
+    EXPECT_EQ( none_style.focus_decor, VXUI_MENU_FOCUS_DECOR_NONE );
+    EXPECT_EQ( glow_style.focus_decor, VXUI_MENU_FOCUS_DECOR_GLOW );
+    EXPECT_EQ( pulse_style.focus_decor, VXUI_MENU_FOCUS_DECOR_PULSE );
+
+    vxui_begin( &utest_fixture->ctx, 0.016f );
+    vxui_set_focus( &utest_fixture->ctx, none_row_id );
+    VXUI( &utest_fixture->ctx, "root.none", {} ) {
+        vxui_menu_begin( &utest_fixture->ctx, &utest_fixture->state, "none_menu", ( vxui_menu_cfg ) {
+            .style = &none_style,
+            .viewport_height = 180.0f,
+        } );
+        vxui_menu_action( &utest_fixture->ctx, &utest_fixture->state, "settings", "menu.settings", vxui__menu_action, ( vxui_menu_row_cfg ) { 0 }, ( vxui_action_cfg ) {
+            .userdata = &utest_fixture->action_count,
+        } );
+        vxui_menu_end( &utest_fixture->ctx, &utest_fixture->state );
+    }
+    vxui_draw_list none_list = vxui_end( &utest_fixture->ctx );
+    EXPECT_EQ( vxui__menu_count_focus_glow_rects( &none_list ), 0 );
+
+    vxui_begin( &utest_fixture->ctx, 0.016f );
+    vxui_set_focus( &utest_fixture->ctx, vxui__menu_row_id( "glow_menu", "settings" ) );
+    VXUI( &utest_fixture->ctx, "root.glow", {} ) {
+        vxui_menu_begin( &utest_fixture->ctx, &utest_fixture->state, "glow_menu", ( vxui_menu_cfg ) {
+            .style = &glow_style,
+            .viewport_height = 180.0f,
+        } );
+        vxui_menu_action( &utest_fixture->ctx, &utest_fixture->state, "settings", "menu.settings", vxui__menu_action, ( vxui_menu_row_cfg ) { 0 }, ( vxui_action_cfg ) {
+            .userdata = &utest_fixture->action_count,
+        } );
+        vxui_menu_end( &utest_fixture->ctx, &utest_fixture->state );
+    }
+    vxui_draw_list glow_list = vxui_end( &utest_fixture->ctx );
+    EXPECT_GT( vxui__menu_count_focus_glow_rects( &glow_list ), 0 );
+
+    vxui_begin( &utest_fixture->ctx, 0.016f );
+    vxui_set_focus( &utest_fixture->ctx, pulse_row_id );
+    VXUI( &utest_fixture->ctx, "root.pulse", {} ) {
+        vxui_menu_begin( &utest_fixture->ctx, &utest_fixture->state, "pulse_menu", ( vxui_menu_cfg ) {
+            .style = &pulse_style,
+            .viewport_height = 180.0f,
+        } );
+        vxui_menu_action( &utest_fixture->ctx, &utest_fixture->state, "settings", "menu.settings", vxui__menu_action, ( vxui_menu_row_cfg ) { 0 }, ( vxui_action_cfg ) {
+            .userdata = &utest_fixture->action_count,
+        } );
+        vxui_menu_end( &utest_fixture->ctx, &utest_fixture->state );
+    }
+    vxui_end( &utest_fixture->ctx );
+
+    const vxui_anim_state* pulse_state = vxui__menu_find_anim_state( &utest_fixture->ctx, pulse_row_id );
+    ASSERT_TRUE( pulse_state != nullptr );
+    EXPECT_GT( pulse_state->scale_current, 1.0f );
+    EXPECT_LT( pulse_state->opacity_current, 1.0f );
 }

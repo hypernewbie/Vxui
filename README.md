@@ -130,7 +130,10 @@ It provides:
 - immediate row emitters like `vxui_menu_action()`, `vxui_menu_option()`, and `vxui_menu_slider()`
 - BR-inspired preset styles via `vxui_menu_style_br_title()` and `vxui_menu_style_br_panel()`
 - generic form presets via `vxui_menu_style_form()` and `vxui_menu_style_compact()`
-- menu-owned spring scroll state with focused-row auto-scroll
+- menu-owned spring scroll state with focused-row auto-scroll scoped to the current menu
+- explicit focus decorations via `VXUI_MENU_FOCUS_DECOR_NONE`, `VXUI_MENU_FOCUS_DECOR_GLOW`, and `VXUI_MENU_FOCUS_DECOR_PULSE`
+
+Preset styles default option rows to wrapping. Override per row with `vxui_menu_row_cfg.wrap_mode`; `vxui_option_cfg` callbacks, userdata, and nav overrides do not change menu wrap behavior.
 
 ### Debug Tooling
 
@@ -305,8 +308,9 @@ VXUI( &ctx, "screen.settings", {} ) {
     vxui_menu_section( &ctx, &settings_menu, "audio", "settings.audio", ( vxui_menu_section_cfg ) { 0 } );
     vxui_menu_option( &ctx, &settings_menu, "difficulty", "settings.difficulty", &difficulty, difficulty_keys, difficulty_count, ( vxui_menu_row_cfg ) {
         .secondary_key = "settings.difficulty.help",
+        .wrap_mode = VXUI_MENU_WRAP_FORCE_OFF,
     }, ( vxui_option_cfg ) {
-        .wrap = true,
+        .on_change = on_difficulty_changed,
     } );
     vxui_menu_slider( &ctx, &settings_menu, "volume", "settings.volume", &volume, 0.0f, 1.0f, ( vxui_menu_row_cfg ) {
         .badge_text_key = "settings.badge.live",
@@ -317,6 +321,8 @@ VXUI( &ctx, "screen.settings", {} ) {
     vxui_menu_end( &ctx, &settings_menu );
 }
 ```
+
+Menu-local auto-scroll only follows rows emitted by that menu in the current frame. For option rows, the default wrap policy comes from `vxui_menu_style.option_wrap_by_default`, and `vxui_menu_row_cfg.wrap_mode` can force wrapping on or off for a specific row.
 
 A compact pause menu with prompts:
 

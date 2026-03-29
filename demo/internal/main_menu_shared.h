@@ -371,7 +371,6 @@ inline void vxui_demo_emit_main_menu_footer(
                 },
                 .backgroundColor = vxui_demo_clay_color( theme.secondary_panel_fill ),
                 .cornerRadius = CLAY_CORNER_RADIUS( 10 ),
-                .border = vxui_demo_panel_border( theme.secondary_panel_border, 1 ),
             } ) {
                 CLAY( Clay_GetElementId( vxui_demo_shared_clay_string( "main.footer.status.row.compact" ) ), {
                     .layout = {
@@ -412,7 +411,6 @@ inline void vxui_demo_emit_main_menu_footer(
                 },
                 .backgroundColor = vxui_demo_clay_color( theme.secondary_panel_fill ),
                 .cornerRadius = CLAY_CORNER_RADIUS( 10 ),
-                .border = vxui_demo_panel_border( theme.secondary_panel_border, 1 ),
             } ) {
                 CLAY( Clay_GetElementId( vxui_demo_shared_clay_string( "main.footer.status.row.primary" ) ), {
                     .layout = {
@@ -476,7 +474,6 @@ inline void vxui_demo_emit_controls_block(
         },
         .backgroundColor = vxui_demo_clay_color( theme.utility_fill ),
         .cornerRadius = CLAY_CORNER_RADIUS( 12 ),
-        .border = vxui_demo_panel_border( theme.utility_border, 1 ),
     } ) {
         const std::string title_id = vxui_demo_controls_block_title_id( id );
         CLAY( Clay_GetElementId( vxui_demo_shared_clay_string( title_id.c_str() ) ), {
@@ -598,7 +595,6 @@ inline void vxui_demo_emit_main_menu_preview_panel(
                             },
                             .backgroundColor = vxui_demo_clay_color( theme.badge_fill ),
                             .cornerRadius = CLAY_CORNER_RADIUS( 8 ),
-                            .border = vxui_demo_panel_border( theme.action_border, 1 ),
                         } ) {
                             VXUI_LABEL( ctx, badge_text, vxui_demo_text_style( visuals.body_font_id, badge_size, theme.badge_text ) );
                         }

@@ -11,6 +11,13 @@
 #include <string>
 #include <vector>
 
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <objbase.h>
+#include <wincodec.h>
+
+#include "demo/internal/shot.h"
 #include "demo/internal/layout_contract.h"
 #include <glad/glad.h>
 #include "TinyWindow.h"
@@ -172,7 +179,10 @@ typedef struct vxui_demo_app
     float title_timer;
     float launch_timer;
     float results_timer;
+    float shot_layout_surface_max_height_override;
     bool request_quit;
+    bool shot_mode;
+    bool shot_force_compact_layout;
     TinyWindow::tWindow* window;
     vxui_input_table keyboard_table;
     vxui_input_table gamepad_table;
@@ -369,6 +379,11 @@ static void vxui_demo_clear_backend_test_surfaces( vxui_demo_renderer* renderer,
 static bool vxui_demo_setup_backend_test_fbo( vxui_demo_renderer* renderer );
 static void vxui_demo_shutdown_backend_test_fbo( vxui_demo_renderer* renderer );
 static bool vxui_demo_readback_r8_texture( GLuint texture, int x, int y, int w, int h, uint8_t* out_pixels );
+static bool vxui_demo_write_png_rgba( const std::filesystem::path& path, int width, int height, const uint8_t* pixels, char* error, size_t error_size );
+static bool vxui_demo_capture_backbuffer_png( const std::filesystem::path& path, int width, int height, char* error, size_t error_size );
+static uint32_t vxui_demo_focus_id_for_screen( vxui_demo_screen_kind screen_kind, const char* focus_name );
+static bool vxui_demo_apply_shot_request( vxui_demo_app* app, vxui_ctx* ctx, const vxui_demo_shot_request& request, char* error, size_t error_size );
+static void vxui_demo_present_draw_list( vxui_demo_renderer* renderer, vxui_ctx* ctx, const vxui_draw_list* list );
 static bool vxui_demo_button_edge( vxui_demo_app* app, vxui_demo_button button, bool down );
 static bool vxui_demo_key_down( const TinyWindow::tWindow* window, int key );
 static bool vxui_demo_char_down( const TinyWindow::tWindow* window, char ch );
@@ -3030,6 +3045,196 @@ static void vxui_demo_render_draw_list( vxui_demo_renderer* renderer, const vxui
     glDisable( GL_SCISSOR_TEST );
 }
 
+static void vxui_demo_present_draw_list( vxui_demo_renderer* renderer, vxui_ctx* ctx, const vxui_draw_list* list )
+{
+    if ( !renderer || !list ) {
+        return;
+    }
+    glBindFramebuffer( GL_FRAMEBUFFER, 0 );
+    glViewport( 0, 0, renderer->window_size.width, renderer->window_size.height );
+    glDisable( GL_SCISSOR_TEST );
+    glEnable( GL_BLEND );
+    glBlendFunc( GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA );
+    glDisable( GL_FRAMEBUFFER_SRGB );
+    const vxui_demo_command_deck_theme& theme = vxui_demo_command_deck_theme_tokens();
+    glClearColor(
+        ( float ) theme.app_background_base.r / 255.0f,
+        ( float ) theme.app_background_base.g / 255.0f,
+        ( float ) theme.app_background_base.b / 255.0f,
+        1.0f );
+    glClear( GL_COLOR_BUFFER_BIT );
+
+    vxui_demo_gl_debug_begin( renderer, "VXUI Draw List" );
+    vxui_demo_render_draw_list( renderer, list );
+    vxui_demo_gl_debug_end( renderer );
+    if ( ctx ) {
+        vxui_flush_text( ctx );
+    }
+    vxui_demo_gl_debug_event( renderer, "Present" );
+}
+
+static bool vxui_demo_write_png_rgba( const std::filesystem::path& path, int width, int height, const uint8_t* pixels, char* error, size_t error_size )
+{
+    if ( width <= 0 || height <= 0 || !pixels ) {
+        std::snprintf( error, error_size, "%s", "invalid PNG write arguments" );
+        return false;
+    }
+
+    std::error_code fs_error;
+    const std::filesystem::path parent = path.parent_path();
+    if ( !parent.empty() ) {
+        std::filesystem::create_directories( parent, fs_error );
+        if ( fs_error ) {
+            std::snprintf( error, error_size, "failed to create output directory: %s", fs_error.message().c_str() );
+            return false;
+        }
+    }
+
+    HRESULT init_hr = CoInitializeEx( nullptr, COINIT_MULTITHREADED );
+    const bool should_uninitialize = SUCCEEDED( init_hr );
+    if ( init_hr == RPC_E_CHANGED_MODE ) {
+        init_hr = S_OK;
+    }
+    if ( FAILED( init_hr ) ) {
+        std::snprintf( error, error_size, "CoInitializeEx failed: 0x%08lx", ( unsigned long ) init_hr );
+        return false;
+    }
+
+    IWICImagingFactory* factory = nullptr;
+    IWICStream* stream = nullptr;
+    IWICBitmapEncoder* encoder = nullptr;
+    IWICBitmapFrameEncode* frame = nullptr;
+    IPropertyBag2* properties = nullptr;
+    bool ok = false;
+    const std::wstring wide_path = path.wstring();
+
+    HRESULT hr = CoCreateInstance( CLSID_WICImagingFactory, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS( &factory ) );
+    if ( FAILED( hr ) ) {
+        std::snprintf( error, error_size, "CoCreateInstance(IWICImagingFactory) failed: 0x%08lx", ( unsigned long ) hr );
+        goto cleanup;
+    }
+
+    hr = factory->CreateStream( &stream );
+    if ( FAILED( hr ) ) {
+        std::snprintf( error, error_size, "CreateStream failed: 0x%08lx", ( unsigned long ) hr );
+        goto cleanup;
+    }
+
+    hr = stream->InitializeFromFilename( wide_path.c_str(), GENERIC_WRITE );
+    if ( FAILED( hr ) ) {
+        std::snprintf( error, error_size, "InitializeFromFilename failed: 0x%08lx", ( unsigned long ) hr );
+        goto cleanup;
+    }
+
+    hr = factory->CreateEncoder( GUID_ContainerFormatPng, nullptr, &encoder );
+    if ( FAILED( hr ) ) {
+        std::snprintf( error, error_size, "CreateEncoder failed: 0x%08lx", ( unsigned long ) hr );
+        goto cleanup;
+    }
+
+    hr = encoder->Initialize( stream, WICBitmapEncoderNoCache );
+    if ( FAILED( hr ) ) {
+        std::snprintf( error, error_size, "Encoder Initialize failed: 0x%08lx", ( unsigned long ) hr );
+        goto cleanup;
+    }
+
+    hr = encoder->CreateNewFrame( &frame, &properties );
+    if ( FAILED( hr ) ) {
+        std::snprintf( error, error_size, "CreateNewFrame failed: 0x%08lx", ( unsigned long ) hr );
+        goto cleanup;
+    }
+
+    hr = frame->Initialize( properties );
+    if ( FAILED( hr ) ) {
+        std::snprintf( error, error_size, "Frame Initialize failed: 0x%08lx", ( unsigned long ) hr );
+        goto cleanup;
+    }
+
+    hr = frame->SetSize( ( UINT ) width, ( UINT ) height );
+    if ( FAILED( hr ) ) {
+        std::snprintf( error, error_size, "Frame SetSize failed: 0x%08lx", ( unsigned long ) hr );
+        goto cleanup;
+    }
+
+    WICPixelFormatGUID pixel_format = GUID_WICPixelFormat32bppBGRA;
+    hr = frame->SetPixelFormat( &pixel_format );
+    if ( FAILED( hr ) ) {
+        std::snprintf( error, error_size, "Frame SetPixelFormat failed: 0x%08lx", ( unsigned long ) hr );
+        goto cleanup;
+    }
+    if ( pixel_format != GUID_WICPixelFormat32bppBGRA ) {
+        std::snprintf( error, error_size, "%s", "PNG encoder rejected BGRA pixel format" );
+        goto cleanup;
+    }
+
+    hr = frame->WritePixels( ( UINT ) height, ( UINT ) ( width * 4 ), ( UINT ) ( width * height * 4 ), const_cast< BYTE* >( pixels ) );
+    if ( FAILED( hr ) ) {
+        std::snprintf( error, error_size, "WritePixels failed: 0x%08lx", ( unsigned long ) hr );
+        goto cleanup;
+    }
+
+    hr = frame->Commit();
+    if ( FAILED( hr ) ) {
+        std::snprintf( error, error_size, "Frame Commit failed: 0x%08lx", ( unsigned long ) hr );
+        goto cleanup;
+    }
+
+    hr = encoder->Commit();
+    if ( FAILED( hr ) ) {
+        std::snprintf( error, error_size, "Encoder Commit failed: 0x%08lx", ( unsigned long ) hr );
+        goto cleanup;
+    }
+
+    ok = true;
+
+cleanup:
+    if ( properties ) properties->Release();
+    if ( frame ) frame->Release();
+    if ( encoder ) encoder->Release();
+    if ( stream ) stream->Release();
+    if ( factory ) factory->Release();
+    if ( should_uninitialize ) {
+        CoUninitialize();
+    }
+    return ok;
+}
+
+static bool vxui_demo_capture_backbuffer_png( const std::filesystem::path& path, int width, int height, char* error, size_t error_size )
+{
+    if ( width <= 0 || height <= 0 ) {
+        std::snprintf( error, error_size, "%s", "invalid capture dimensions" );
+        return false;
+    }
+
+    std::vector< uint8_t > pixels( ( size_t ) width * ( size_t ) height * 4u );
+    glPixelStorei( GL_PACK_ALIGNMENT, 1 );
+    auto try_read = [&]( GLenum buffer ) -> bool
+    {
+        while ( glGetError() != GL_NO_ERROR ) {
+        }
+        glReadBuffer( buffer );
+        if ( glGetError() != GL_NO_ERROR ) {
+            return false;
+        }
+        glReadPixels( 0, 0, width, height, GL_BGRA, GL_UNSIGNED_BYTE, pixels.data() );
+        return glGetError() == GL_NO_ERROR;
+    };
+    if ( !try_read( GL_BACK ) && !try_read( GL_FRONT ) ) {
+        std::snprintf( error, error_size, "%s", "glReadPixels failed for both back and front buffers" );
+        return false;
+    }
+
+    const size_t row_stride = ( size_t ) width * 4u;
+    std::vector< uint8_t > flipped( pixels.size() );
+    for ( int y = 0; y < height; ++y ) {
+        const uint8_t* src = pixels.data() + ( size_t ) ( height - 1 - y ) * row_stride;
+        uint8_t* dst = flipped.data() + ( size_t ) y * row_stride;
+        std::memcpy( dst, src, row_stride );
+    }
+
+    return vxui_demo_write_png_rgba( path, width, height, flipped.data(), error, error_size );
+}
+
 static bool vxui_demo_button_edge( vxui_demo_app* app, vxui_demo_button button, bool down )
 {
     bool pressed = down && !app->button_prev[ button ];
@@ -3073,11 +3278,11 @@ static bool vxui_demo_gamepad_down( const TinyWindow::gamepad_t* gamepad, int bu
 int main( int argc, char** argv )
 {
     bool vefc_backend_test_mode = false;
-    for ( int i = 1; i < argc; ++i ) {
-        if ( std::strcmp( argv[ i ], "--vefc-backend-test" ) == 0 ) {
-            vefc_backend_test_mode = true;
-            break;
-        }
+    vxui_demo_shot_request shot_request = {};
+    char cli_error[ 256 ] = {};
+    if ( !vxui_demo_parse_cli( argc, argv, &vefc_backend_test_mode, &shot_request, cli_error, sizeof( cli_error ) ) ) {
+        std::fprintf( stderr, "VXUI demo argument error: %s\n", cli_error );
+        return 1;
     }
 
     // Disable MSVC CRT error dialogs
@@ -3095,8 +3300,8 @@ int main( int argc, char** argv )
      cfg.versionMajor = 3;
      cfg.versionMinor = 3;
      cfg.enableSRGB = false;
-     cfg.resolution.width = vefc_backend_test_mode ? 1920 : 1280;
-     cfg.resolution.height = vefc_backend_test_mode ? 1080 : 720;
+     cfg.resolution.width = shot_request.enabled ? ( unsigned int ) shot_request.width : ( vefc_backend_test_mode ? 1920u : 1280u );
+     cfg.resolution.height = shot_request.enabled ? ( unsigned int ) shot_request.height : ( vefc_backend_test_mode ? 1080u : 720u );
      cfg.SetProfile( TinyWindow::profile_t::core );
      cfg.startHidden = vefc_backend_test_mode;
 
@@ -3287,6 +3492,9 @@ int main( int argc, char** argv )
     app.volume = 0.40f;
     app.scanline_index = 1;
     app.effect_intensity_index = 1;
+    app.shot_layout_surface_max_height_override = 0.0f;
+    app.shot_mode = shot_request.enabled;
+    app.shot_force_compact_layout = shot_request.compact_override;
     app.watched_seq_path = vxui_demo_make_temp_path( "vxui_demo_sequence.toml" );
     app.last_selected_seq = -1;
     vxui_set_text_fn( &ctx, vxui_demo_text, &app );
@@ -3321,7 +3529,7 @@ int main( int argc, char** argv )
     vxui_demo_apply_locale_index( &ctx, &app, VXUI_DEMO_LOCALE_ENGLISH );
     vxui_demo_apply_prompt_table_index( &ctx, &app, 0 );
 
-    if ( !vxui_demo_write_file(
+    if ( !shot_request.enabled && !vxui_demo_write_file(
              app.watched_seq_path.c_str(),
              "[sequence.main_menu_enter]\n"
              "steps = [\n"
@@ -3338,7 +3546,7 @@ int main( int argc, char** argv )
     }
 
     char error[ 256 ] = {};
-    if ( !vxui_load_seq_toml( &ctx, app.watched_seq_path.c_str(), VXUI_DEMO_DEFAULT_WATCHED_SEQUENCE_NAME, error, sizeof( error ) ) ) {
+    if ( !shot_request.enabled && !vxui_load_seq_toml( &ctx, app.watched_seq_path.c_str(), VXUI_DEMO_DEFAULT_WATCHED_SEQUENCE_NAME, error, sizeof( error ) ) ) {
         std::fprintf( stderr, "Failed to load %s: %s\n", app.watched_seq_path.c_str(), error );
         std::remove( app.watched_seq_path.c_str() );
         vxui_demo_shutdown_renderer( &renderer );
@@ -3347,7 +3555,7 @@ int main( int argc, char** argv )
         return 1;
     }
 #ifdef VXUI_DEBUG
-    if ( !vxui_watch_seq_file( &ctx, app.watched_seq_path.c_str(), VXUI_DEMO_DEFAULT_WATCHED_SEQUENCE_NAME ) ) {
+    if ( !shot_request.enabled && !vxui_watch_seq_file( &ctx, app.watched_seq_path.c_str(), VXUI_DEMO_DEFAULT_WATCHED_SEQUENCE_NAME ) ) {
         std::fprintf( stderr, "Failed to watch %s for hot reload.\n", app.watched_seq_path.c_str() );
         std::remove( app.watched_seq_path.c_str() );
         vxui_demo_shutdown_renderer( &renderer );
@@ -3355,9 +3563,11 @@ int main( int argc, char** argv )
         manager->ShutDown();
         return 1;
     }
-    ctx.debug_seq_editor.selected_seq = vxui_demo_find_seq_index( &ctx, VXUI_DEMO_DEFAULT_WATCHED_SEQUENCE_NAME );
-    vxui_debug_generate_seq_outputs( &ctx );
-    vxui_demo_sync_step_editor( &app );
+    if ( !shot_request.enabled ) {
+        ctx.debug_seq_editor.selected_seq = vxui_demo_find_seq_index( &ctx, VXUI_DEMO_DEFAULT_WATCHED_SEQUENCE_NAME );
+        vxui_debug_generate_seq_outputs( &ctx );
+        vxui_demo_sync_step_editor( &app );
+    }
 #endif
 
     auto register_surface_enter = [&]( const char* name, const char* target_id, float slide_x, float slide_y, float scale_start )
@@ -3385,19 +3595,66 @@ int main( int argc, char** argv )
         { 0, vxui_id( "settings.surface" ), VXUI_PROP_OPACITY, 0.4f },
         { 0, vxui_id( "settings.surface" ), VXUI_PROP_SLIDE_X, -20.0f },
     };
-    vxui_register_seq( &ctx, "settings_enter", settings_enter, ( int ) ( sizeof( settings_enter ) / sizeof( settings_enter[ 0 ] ) ) );
-    vxui_register_seq( &ctx, "settings_exit", settings_exit, ( int ) ( sizeof( settings_exit ) / sizeof( settings_exit[ 0 ] ) ) );
-    register_surface_enter( "boot_enter", "boot.surface", 0.0f, 18.0f, 0.98f );
-    register_surface_enter( "title_enter", "title.surface", 0.0f, 24.0f, 0.98f );
-    register_surface_enter( "sortie_enter", "sortie.surface", 24.0f, 0.0f, 0.99f );
-    register_surface_enter( "loadout_enter", "loadout.surface", 24.0f, 0.0f, 0.99f );
-    register_surface_enter( "archives_enter", "archives.surface", 18.0f, 0.0f, 0.99f );
-    register_surface_enter( "records_enter", "records.surface", 18.0f, 0.0f, 0.99f );
-    register_surface_enter( "credits_enter", "credits.surface", 0.0f, 18.0f, 0.99f );
-    register_surface_enter( "launch_stub_enter", "launch_stub.surface", 0.0f, 18.0f, 0.99f );
-    register_surface_enter( "results_stub_enter", "results_stub.surface", 0.0f, 18.0f, 0.99f );
-    vxui_push_screen( &ctx, "boot" );
-    vxui_demo_refresh_status( &app );
+    if ( !shot_request.enabled ) {
+        vxui_register_seq( &ctx, "settings_enter", settings_enter, ( int ) ( sizeof( settings_enter ) / sizeof( settings_enter[ 0 ] ) ) );
+        vxui_register_seq( &ctx, "settings_exit", settings_exit, ( int ) ( sizeof( settings_exit ) / sizeof( settings_exit[ 0 ] ) ) );
+        register_surface_enter( "boot_enter", "boot.surface", 0.0f, 18.0f, 0.98f );
+        register_surface_enter( "title_enter", "title.surface", 0.0f, 24.0f, 0.98f );
+        register_surface_enter( "sortie_enter", "sortie.surface", 24.0f, 0.0f, 0.99f );
+        register_surface_enter( "loadout_enter", "loadout.surface", 24.0f, 0.0f, 0.99f );
+        register_surface_enter( "archives_enter", "archives.surface", 18.0f, 0.0f, 0.99f );
+        register_surface_enter( "records_enter", "records.surface", 18.0f, 0.0f, 0.99f );
+        register_surface_enter( "credits_enter", "credits.surface", 0.0f, 18.0f, 0.99f );
+        register_surface_enter( "launch_stub_enter", "launch_stub.surface", 0.0f, 18.0f, 0.99f );
+        register_surface_enter( "results_stub_enter", "results_stub.surface", 0.0f, 18.0f, 0.99f );
+        vxui_push_screen( &ctx, "boot" );
+        vxui_demo_refresh_status( &app );
+    } else {
+        if ( !vxui_demo_apply_shot_request( &app, &ctx, shot_request, error, sizeof( error ) ) ) {
+            std::fprintf( stderr, "Failed to apply shot request: %s\n", error );
+            Clay_SetCurrentContext( nullptr );
+            if ( !app.watched_seq_path.empty() ) {
+                std::remove( app.watched_seq_path.c_str() );
+            }
+            vxui_demo_shutdown_renderer( &renderer );
+            manager->ShutDown();
+            window.reset( nullptr );
+            return 1;
+        }
+        vxui_demo_refresh_status( &app );
+
+        vxui_begin( &ctx, 1.0f / 60.0f );
+        vxui_demo_render_frontend( &app, &renderer, &ctx );
+        vxui_draw_list list = vxui_end( &ctx );
+#ifdef VXUI_DEBUG
+        vxui_demo_debug_validate_demo_layout( &ctx, &list );
+#endif
+        vxui_demo_present_draw_list( &renderer, &ctx, &list );
+        window->SwapDrawBuffers();
+        glFinish();
+
+        char capture_error[ 256 ] = {};
+        if ( !vxui_demo_capture_backbuffer_png( std::filesystem::path( shot_request.out_path ), ( int ) renderer.window_size.width, ( int ) renderer.window_size.height, capture_error, sizeof( capture_error ) ) ) {
+            std::fprintf( stderr, "Failed to capture screenshot: %s\n", capture_error );
+            Clay_SetCurrentContext( nullptr );
+            if ( !app.watched_seq_path.empty() ) {
+                std::remove( app.watched_seq_path.c_str() );
+            }
+            vxui_demo_shutdown_renderer( &renderer );
+            manager->ShutDown();
+            window.reset( nullptr );
+            return 1;
+        }
+
+        Clay_SetCurrentContext( nullptr );
+        if ( !app.watched_seq_path.empty() ) {
+            std::remove( app.watched_seq_path.c_str() );
+        }
+        vxui_demo_shutdown_renderer( &renderer );
+        manager->ShutDown();
+        window.reset( nullptr );
+        return 0;
+    }
 
     std::chrono::steady_clock::time_point previous = std::chrono::steady_clock::now();
     while ( !window->shouldClose ) {
@@ -3681,25 +3938,7 @@ int main( int argc, char** argv )
         }
 #endif
 
-        glBindFramebuffer( GL_FRAMEBUFFER, 0 );
-        glViewport( 0, 0, renderer.window_size.width, renderer.window_size.height );
-        glDisable( GL_SCISSOR_TEST );
-        glEnable( GL_BLEND );
-        glBlendFunc( GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA );
-        glDisable( GL_FRAMEBUFFER_SRGB );
-        const vxui_demo_command_deck_theme& theme = vxui_demo_command_deck_theme_tokens();
-        glClearColor(
-            ( float ) theme.app_background_base.r / 255.0f,
-            ( float ) theme.app_background_base.g / 255.0f,
-            ( float ) theme.app_background_base.b / 255.0f,
-            1.0f );
-        glClear( GL_COLOR_BUFFER_BIT );
-
-        vxui_demo_gl_debug_begin( &renderer, "VXUI Draw List" );
-        vxui_demo_render_draw_list( &renderer, &list );
-        vxui_demo_gl_debug_end( &renderer );
-        vxui_flush_text( &ctx );
-        vxui_demo_gl_debug_event( &renderer, "Present" );
+        vxui_demo_present_draw_list( &renderer, &ctx, &list );
         if ( app.request_quit ) {
             window->shouldClose = true;
         }
@@ -3856,6 +4095,153 @@ static void vxui_demo_request_quit( vxui_ctx* ctx, uint32_t id, void* userdata )
     }
 }
 
+static uint32_t vxui_demo_focus_id_for_screen( vxui_demo_screen_kind screen_kind, const char* focus_name )
+{
+    const char* focus = focus_name ? focus_name : "";
+    switch ( screen_kind ) {
+        case VXUI_DEMO_SCREEN_TITLE:
+            if ( focus[ 0 ] == '\0' || std::strcmp( focus, "title.enter" ) == 0 || std::strcmp( focus, "enter" ) == 0 ) {
+                return vxui_id( "title.enter" );
+            }
+            break;
+        case VXUI_DEMO_SCREEN_MAIN_MENU:
+            if ( focus[ 0 ] == '\0' || std::strcmp( focus, "sortie" ) == 0 || std::strcmp( focus, "main.command_menu.sortie" ) == 0 ) return vxui_idi( "main.command_menu", ( int ) vxui_id( "sortie" ) );
+            if ( std::strcmp( focus, "loadout" ) == 0 || std::strcmp( focus, "main.command_menu.loadout" ) == 0 ) return vxui_idi( "main.command_menu", ( int ) vxui_id( "loadout" ) );
+            if ( std::strcmp( focus, "archives" ) == 0 || std::strcmp( focus, "main.command_menu.archives" ) == 0 ) return vxui_idi( "main.command_menu", ( int ) vxui_id( "archives" ) );
+            if ( std::strcmp( focus, "settings" ) == 0 || std::strcmp( focus, "main.command_menu.settings" ) == 0 ) return vxui_idi( "main.command_menu", ( int ) vxui_id( "settings" ) );
+            if ( std::strcmp( focus, "records" ) == 0 || std::strcmp( focus, "main.command_menu.records" ) == 0 ) return vxui_idi( "main.command_menu", ( int ) vxui_id( "records" ) );
+            if ( std::strcmp( focus, "credits" ) == 0 || std::strcmp( focus, "main.command_menu.credits" ) == 0 ) return vxui_idi( "main.command_menu", ( int ) vxui_id( "credits" ) );
+            if ( std::strcmp( focus, "quit" ) == 0 || std::strcmp( focus, "main.command_menu.quit" ) == 0 ) return vxui_idi( "main.command_menu", ( int ) vxui_id( "quit" ) );
+            break;
+        case VXUI_DEMO_SCREEN_SORTIE:
+            if ( focus[ 0 ] == '\0' || std::strcmp( focus, "mission" ) == 0 || std::strcmp( focus, "sortie.menu.mission" ) == 0 ) return vxui_idi( "sortie.menu", ( int ) vxui_id( "mission" ) );
+            if ( std::strcmp( focus, "difficulty" ) == 0 || std::strcmp( focus, "sortie.menu.difficulty" ) == 0 ) return vxui_idi( "sortie.menu", ( int ) vxui_id( "difficulty" ) );
+            if ( std::strcmp( focus, "start" ) == 0 || std::strcmp( focus, "sortie.menu.start" ) == 0 ) return vxui_idi( "sortie.menu", ( int ) vxui_id( "start" ) );
+            if ( std::strcmp( focus, "back" ) == 0 || std::strcmp( focus, "sortie.menu.back" ) == 0 ) return vxui_idi( "sortie.menu", ( int ) vxui_id( "back" ) );
+            break;
+        case VXUI_DEMO_SCREEN_LOADOUT:
+            if ( focus[ 0 ] == '\0' || std::strcmp( focus, "ship" ) == 0 || std::strcmp( focus, "loadout.menu.ship" ) == 0 ) return vxui_idi( "loadout.menu", ( int ) vxui_id( "ship" ) );
+            if ( std::strcmp( focus, "primary" ) == 0 || std::strcmp( focus, "loadout.menu.primary" ) == 0 ) return vxui_idi( "loadout.menu", ( int ) vxui_id( "primary" ) );
+            if ( std::strcmp( focus, "support" ) == 0 || std::strcmp( focus, "loadout.menu.support" ) == 0 ) return vxui_idi( "loadout.menu", ( int ) vxui_id( "support" ) );
+            if ( std::strcmp( focus, "system" ) == 0 || std::strcmp( focus, "loadout.menu.system" ) == 0 ) return vxui_idi( "loadout.menu", ( int ) vxui_id( "system" ) );
+            if ( std::strcmp( focus, "back" ) == 0 || std::strcmp( focus, "loadout.menu.back" ) == 0 ) return vxui_idi( "loadout.menu", ( int ) vxui_id( "back" ) );
+            break;
+        case VXUI_DEMO_SCREEN_ARCHIVES:
+            if ( focus[ 0 ] == '\0' || std::strcmp( focus, "category" ) == 0 || std::strcmp( focus, "archives.menu.category" ) == 0 ) return vxui_idi( "archives.menu", ( int ) vxui_id( "category" ) );
+            if ( std::strcmp( focus, "entry" ) == 0 || std::strcmp( focus, "archives.menu.entry" ) == 0 ) return vxui_idi( "archives.menu", ( int ) vxui_id( "entry" ) );
+            if ( std::strcmp( focus, "back" ) == 0 || std::strcmp( focus, "archives.menu.back" ) == 0 ) return vxui_idi( "archives.menu", ( int ) vxui_id( "back" ) );
+            break;
+        case VXUI_DEMO_SCREEN_SETTINGS:
+            if ( focus[ 0 ] == '\0' || std::strcmp( focus, "challenge" ) == 0 || std::strcmp( focus, "settings.body_menu.challenge" ) == 0 ) return vxui_idi( "settings.body_menu", ( int ) vxui_id( "challenge" ) );
+            if ( std::strcmp( focus, "volume" ) == 0 || std::strcmp( focus, "settings.body_menu.volume" ) == 0 ) return vxui_idi( "settings.body_menu", ( int ) vxui_id( "volume" ) );
+            if ( std::strcmp( focus, "scanlines" ) == 0 || std::strcmp( focus, "settings.body_menu.scanlines" ) == 0 ) return vxui_idi( "settings.body_menu", ( int ) vxui_id( "scanlines" ) );
+            if ( std::strcmp( focus, "effect_intensity" ) == 0 || std::strcmp( focus, "settings.body_menu.effect_intensity" ) == 0 ) return vxui_idi( "settings.body_menu", ( int ) vxui_id( "effect_intensity" ) );
+            if ( std::strcmp( focus, "prompt_table" ) == 0 || std::strcmp( focus, "settings.body_menu.prompt_table" ) == 0 ) return vxui_idi( "settings.body_menu", ( int ) vxui_id( "prompt_table" ) );
+            if ( std::strcmp( focus, "locale_index" ) == 0 || std::strcmp( focus, "settings.body_menu.locale_index" ) == 0 ) return vxui_idi( "settings.body_menu", ( int ) vxui_id( "locale_index" ) );
+            if ( std::strcmp( focus, "back" ) == 0 || std::strcmp( focus, "settings.back" ) == 0 ) return vxui_id( "settings.back" );
+            if ( std::strcmp( focus, "defaults" ) == 0 || std::strcmp( focus, "settings.defaults" ) == 0 ) return vxui_id( "settings.defaults" );
+            break;
+        case VXUI_DEMO_SCREEN_RECORDS:
+            if ( focus[ 0 ] == '\0' || std::strcmp( focus, "board" ) == 0 || std::strcmp( focus, "records.menu.board" ) == 0 ) return vxui_idi( "records.menu", ( int ) vxui_id( "board" ) );
+            if ( std::strcmp( focus, "run" ) == 0 || std::strcmp( focus, "records.menu.run" ) == 0 ) return vxui_idi( "records.menu", ( int ) vxui_id( "run" ) );
+            if ( std::strcmp( focus, "back" ) == 0 || std::strcmp( focus, "records.menu.back" ) == 0 ) return vxui_idi( "records.menu", ( int ) vxui_id( "back" ) );
+            break;
+        case VXUI_DEMO_SCREEN_CREDITS:
+            if ( focus[ 0 ] == '\0' || std::strcmp( focus, "back" ) == 0 || std::strcmp( focus, "credits.back" ) == 0 ) return vxui_id( "credits.back" );
+            break;
+        case VXUI_DEMO_SCREEN_RESULTS_STUB:
+            if ( focus[ 0 ] == '\0' || std::strcmp( focus, "return" ) == 0 || std::strcmp( focus, "results_stub.return" ) == 0 ) return vxui_id( "results_stub.return" );
+            break;
+        case VXUI_DEMO_SCREEN_BOOT:
+        case VXUI_DEMO_SCREEN_LAUNCH_STUB:
+        case VXUI_DEMO_SCREEN_UNKNOWN:
+        default:
+            break;
+    }
+    return 0u;
+}
+
+static bool vxui_demo_apply_shot_request( vxui_demo_app* app, vxui_ctx* ctx, const vxui_demo_shot_request& request, char* error, size_t error_size )
+{
+    if ( !app || !ctx || !request.enabled ) {
+        std::snprintf( error, error_size, "%s", "invalid shot request" );
+        return false;
+    }
+
+    const vxui_demo_screen_kind screen_kind = vxui_demo_screen_kind_from_name( request.screen_name );
+    if ( screen_kind == VXUI_DEMO_SCREEN_UNKNOWN ) {
+        std::snprintf( error, error_size, "%s", "shot request referenced an unknown screen" );
+        return false;
+    }
+
+    app->shot_mode = true;
+    app->shot_force_compact_layout = request.compact_override;
+    app->shot_layout_surface_max_height_override = request.compact_override
+        ? std::max( 0.0f, 648.0f - VXUI_DEMO_LAYOUT_OUTER_PADDING * 2.0f )
+        : 0.0f;
+    app->request_quit = false;
+    app->show_settings = false;
+    app->boot_timer = 0.0f;
+    app->title_timer = 0.0f;
+    app->launch_timer = 0.0f;
+    app->results_timer = 0.0f;
+    app->settings_body_scroll_current = 0.0f;
+    app->settings_body_scroll_target = 0.0f;
+    app->settings_body_scroll_velocity = 0.0f;
+    app->scanline_index = request.disable_scanline ? 0 : 1;
+
+    vxui_demo_apply_locale_index( ctx, app, request.locale_index );
+    vxui_demo_apply_prompt_table_index( ctx, app, request.prompt_table_index );
+
+    ctx->active_seq_count = 0;
+    ctx->focused_id = 0;
+    ctx->pending_focus_id = 0;
+    ctx->focus_ring_state.valid = false;
+
+    vxui_demo_replace_screen_named( ctx, app, request.screen_name );
+    if ( ctx->screen_count > 0 ) {
+        vxui_screen* live = &ctx->screens[ ctx->screen_count - 1 ];
+        live->state = VXUI_SCREEN_ACTIVE;
+        live->state_started_ms = ctx->elapsed_ms;
+    }
+    ctx->active_seq_count = 0;
+
+    const uint32_t focus_id = vxui_demo_focus_id_for_screen( screen_kind, request.focus_id.empty() ? nullptr : request.focus_id.c_str() );
+    if ( !request.focus_id.empty() && focus_id == 0u ) {
+        std::snprintf( error, error_size, "unsupported --focus value for screen '%s'", request.screen_name );
+        return false;
+    }
+    if ( focus_id != 0u ) {
+        vxui_set_focus( ctx, focus_id );
+        switch ( screen_kind ) {
+            case VXUI_DEMO_SCREEN_MAIN_MENU:
+                app->main_menu_state.last_focused_row_id = focus_id;
+                break;
+            case VXUI_DEMO_SCREEN_SORTIE:
+                app->sortie_menu_state.last_focused_row_id = focus_id;
+                break;
+            case VXUI_DEMO_SCREEN_LOADOUT:
+                app->loadout_menu_state.last_focused_row_id = focus_id;
+                break;
+            case VXUI_DEMO_SCREEN_ARCHIVES:
+                app->archives_menu_state.last_focused_row_id = focus_id;
+                break;
+            case VXUI_DEMO_SCREEN_SETTINGS:
+                if ( std::strncmp( request.focus_id.c_str(), "settings.", 9 ) != 0 ) {
+                    app->settings_menu_state.last_focused_row_id = focus_id;
+                }
+                break;
+            case VXUI_DEMO_SCREEN_RECORDS:
+                app->records_menu_state.last_focused_row_id = focus_id;
+                break;
+            default:
+                break;
+        }
+    }
+
+    return true;
+}
+
 static void vxui_demo_restore_defaults_action( vxui_ctx* ctx, uint32_t id, void* userdata )
 {
     ( void ) id;
@@ -3925,6 +4311,7 @@ static void vxui_demo_emit_screen_surface(
     float surface_width,
     float surface_max_height,
     bool rtl,
+    bool background_scanline,
     TEmitChildren&& emit_children )
 {
     const vxui_demo_command_deck_theme& theme = vxui_demo_command_deck_theme_tokens();
@@ -3937,6 +4324,10 @@ static void vxui_demo_emit_screen_surface(
         },
         .backgroundColor = vxui_demo_clay_color( theme.app_background_base ),
     } ) {
+        if ( background_scanline ) {
+            vxui_demo_decl_scope root_decl( ctx, vxui_id( root_id ) );
+            VXUI_TRAIT( VXUI_TRAIT_SCANLINE, ( vxui_demo_scanline ) { .spacing = 10.0f, .alpha = theme.surface_scanline_alpha * 0.45f } );
+        }
         CLAY( vxui__clay_id_from_hash( vxui_id( surface_id ) ), {
             .layout = {
                 .sizing = { CLAY_SIZING_FIXED( surface_width ), CLAY_SIZING_GROW( 0, surface_max_height ) },
@@ -3949,10 +4340,6 @@ static void vxui_demo_emit_screen_surface(
             .cornerRadius = CLAY_CORNER_RADIUS( 18 ),
             .border = vxui_demo_panel_border( theme.primary_panel_border, 1 ),
         } ) {
-            {
-                vxui_demo_decl_scope surface_decl( ctx, vxui_id( surface_id ) );
-                VXUI_TRAIT( VXUI_TRAIT_SCANLINE, ( vxui_demo_scanline ) { .spacing = 8.0f, .alpha = theme.surface_scanline_alpha } );
-            }
             emit_children();
         }
     }
@@ -3962,11 +4349,12 @@ static void vxui_demo_render_boot_screen( vxui_demo_app* app, vxui_ctx* ctx )
 {
     const vxui_demo_command_deck_theme& theme = vxui_demo_command_deck_theme_tokens();
     const bool rtl = ctx->rtl;
+    const bool background_scanline = app ? app->scanline_index != 0 : true;
     const float viewport_width = std::max( 0.0f, ( float ) ctx->cfg.screen_width - VXUI_DEMO_LAYOUT_OUTER_PADDING * 2.0f );
     const vxui_demo_surface_metrics surface_metrics = vxui_demo_compute_surface_metrics( viewport_width, ctx->locale, VXUI_DEMO_SURFACE_BOOT );
     const float surface_max_height = std::max( 0.0f, ( float ) ctx->cfg.screen_height - VXUI_DEMO_LAYOUT_OUTER_PADDING * 2.0f );
 
-    vxui_demo_emit_screen_surface( ctx, "boot", "boot.surface", surface_metrics.surface_width, surface_max_height, rtl, [&]() {
+    vxui_demo_emit_screen_surface( ctx, "boot", "boot.surface", surface_metrics.surface_width, surface_max_height, rtl, background_scanline, [&]() {
         VXUI_LABEL( ctx, "boot.line.0", ( vxui_label_cfg ) {
             .font_id = VXUI_DEMO_FONT_ROLE_TITLE,
             .font_size = 42.0f,
@@ -4006,12 +4394,13 @@ static void vxui_demo_render_title_screen( vxui_demo_app* app, vxui_ctx* ctx, co
 {
     const vxui_demo_command_deck_theme& theme = vxui_demo_command_deck_theme_tokens();
     const bool rtl = ctx->rtl;
+    const bool background_scanline = app ? app->scanline_index != 0 : true;
     const float control_height = vxui_demo_control_height( renderer, ctx->locale );
     const float viewport_width = std::max( 0.0f, ( float ) ctx->cfg.screen_width - VXUI_DEMO_LAYOUT_OUTER_PADDING * 2.0f );
     const vxui_demo_surface_metrics surface_metrics = vxui_demo_compute_surface_metrics( viewport_width, ctx->locale, VXUI_DEMO_SURFACE_TITLE );
     const float surface_max_height = std::max( 0.0f, ( float ) ctx->cfg.screen_height - VXUI_DEMO_LAYOUT_OUTER_PADDING * 2.0f );
 
-    vxui_demo_emit_screen_surface( ctx, "title", "title.surface", surface_metrics.surface_width, surface_max_height, rtl, [&]() {
+    vxui_demo_emit_screen_surface( ctx, "title", "title.surface", surface_metrics.surface_width, surface_max_height, rtl, background_scanline, [&]() {
         VXUI( ctx, "title.hero", {
             .layout = {
                 .sizing = { CLAY_SIZING_GROW( 0 ), CLAY_SIZING_FIT( 0 ) },
@@ -4070,12 +4459,17 @@ static void vxui_demo_render_title_screen( vxui_demo_app* app, vxui_ctx* ctx, co
 static void vxui_demo_render_main_menu_screen( vxui_demo_app* app, vxui_ctx* ctx )
 {
     const bool rtl = ctx->rtl;
+    const bool background_scanline = app ? app->scanline_index != 0 : true;
     const float viewport_width = std::max( 0.0f, ( float ) ctx->cfg.screen_width - VXUI_DEMO_LAYOUT_OUTER_PADDING * 2.0f );
     const float surface_max_height = std::max( 0.0f, ( float ) ctx->cfg.screen_height - VXUI_DEMO_LAYOUT_OUTER_PADDING * 2.0f );
-    const vxui_demo_main_menu_layout_spec layout = vxui_demo_resolve_main_menu_layout( viewport_width, surface_max_height, ctx->locale );
+    const float layout_surface_max_height =
+        app && app->shot_layout_surface_max_height_override > 0.0f
+        ? std::min( surface_max_height, app->shot_layout_surface_max_height_override )
+        : surface_max_height;
+    const vxui_demo_main_menu_layout_spec layout = vxui_demo_resolve_main_menu_layout( viewport_width, layout_surface_max_height, ctx->locale );
     vxui_menu_style menu_style = vxui_demo_menu_style_title_deck();
 
-    vxui_demo_emit_screen_surface( ctx, "main_menu", "main.surface", layout.surface.surface_width, layout.surface_max_height, rtl, [&]() {
+    vxui_demo_emit_screen_surface( ctx, "main_menu", "main.surface", layout.surface.surface_width, layout.surface_max_height, rtl, background_scanline, [&]() {
         const vxui_demo_main_menu_preview* preview = vxui_demo_current_main_menu_preview( app );
         vxui_demo_emit_main_menu_shell(
             ctx,
@@ -4142,6 +4536,8 @@ static void vxui_demo_render_sortie_screen( vxui_demo_app* app, vxui_ctx* ctx )
             .menu_state = &app->sortie_menu_state,
             .selected_mission_index = &app->selected_mission_index,
             .difficulty_index = &app->difficulty,
+            .layout_surface_max_height_override = app ? app->shot_layout_surface_max_height_override : 0.0f,
+            .background_scanline = app ? app->scanline_index != 0 : true,
             .start_fn = vxui_demo_launch_stub,
             .start_cfg = ( vxui_action_cfg ) { .userdata = app },
             .back_fn = vxui_demo_open_main_menu,
@@ -4165,6 +4561,8 @@ static void vxui_demo_render_loadout_screen( vxui_demo_app* app, vxui_ctx* ctx )
             .selected_primary_index = &app->selected_primary_index,
             .selected_support_index = &app->selected_support_index,
             .selected_system_index = &app->selected_system_index,
+            .layout_surface_max_height_override = app ? app->shot_layout_surface_max_height_override : 0.0f,
+            .background_scanline = app ? app->scanline_index != 0 : true,
             .back_fn = vxui_demo_open_main_menu,
             .back_cfg = ( vxui_action_cfg ) { .userdata = app },
             .status = {
@@ -4184,6 +4582,8 @@ static void vxui_demo_render_archives_screen( vxui_demo_app* app, vxui_ctx* ctx 
             .menu_state = &app->archives_menu_state,
             .archive_category_index = &app->archive_category_index,
             .archive_entry_index = &app->archive_entry_index,
+            .layout_surface_max_height_override = app ? app->shot_layout_surface_max_height_override : 0.0f,
+            .background_scanline = app ? app->scanline_index != 0 : true,
             .back_fn = vxui_demo_open_main_menu,
             .back_cfg = ( vxui_action_cfg ) { .userdata = app },
             .status = {
@@ -4199,14 +4599,19 @@ static void vxui_demo_render_settings_screen( vxui_demo_app* app, vxui_ctx* ctx,
 {
     const vxui_demo_command_deck_theme& theme = vxui_demo_command_deck_theme_tokens();
     const bool rtl = ctx->rtl;
+    const bool background_scanline = app ? app->scanline_index != 0 : true;
     const float control_height = vxui_demo_control_height( renderer, ctx->locale );
     const float viewport_width = std::max( 0.0f, ( float ) ctx->cfg.screen_width - VXUI_DEMO_LAYOUT_OUTER_PADDING * 2.0f );
     const float surface_max_height = std::max( 0.0f, ( float ) ctx->cfg.screen_height - VXUI_DEMO_LAYOUT_OUTER_PADDING * 2.0f );
-    const vxui_demo_settings_layout_spec layout = vxui_demo_resolve_settings_layout( viewport_width, surface_max_height, ctx->locale );
+    const float layout_surface_max_height =
+        app && app->shot_layout_surface_max_height_override > 0.0f
+        ? std::min( surface_max_height, app->shot_layout_surface_max_height_override )
+        : surface_max_height;
+    const vxui_demo_settings_layout_spec layout = vxui_demo_resolve_settings_layout( viewport_width, layout_surface_max_height, ctx->locale );
     const vxui_demo_surface_metrics& surface_metrics = layout.surface;
     vxui_menu_style form_style = vxui_demo_menu_style_form_deck( surface_metrics.label_lane_width );
 
-    vxui_demo_emit_screen_surface( ctx, "settings", "settings.surface", surface_metrics.surface_width, layout.surface_max_height, rtl, [&]() {
+    vxui_demo_emit_screen_surface( ctx, "settings", "settings.surface", surface_metrics.surface_width, layout.surface_max_height, rtl, background_scanline, [&]() {
         VXUI( ctx, "settings.header", {
             .layout = {
                 .sizing = { CLAY_SIZING_GROW( 0 ), CLAY_SIZING_FIT( 0 ) },
@@ -4306,6 +4711,8 @@ static void vxui_demo_render_records_screen( vxui_demo_app* app, vxui_ctx* ctx )
             .menu_state = &app->records_menu_state,
             .records_board_index = &app->records_board_index,
             .records_entry_index = &app->records_entry_index,
+            .layout_surface_max_height_override = app ? app->shot_layout_surface_max_height_override : 0.0f,
+            .background_scanline = app ? app->scanline_index != 0 : true,
             .back_fn = vxui_demo_open_main_menu,
             .back_cfg = ( vxui_action_cfg ) { .userdata = app },
             .status = {
@@ -4321,12 +4728,13 @@ static void vxui_demo_render_credits_screen( vxui_demo_app* app, vxui_ctx* ctx, 
 {
     const vxui_demo_command_deck_theme& theme = vxui_demo_command_deck_theme_tokens();
     const bool rtl = ctx->rtl;
+    const bool background_scanline = app ? app->scanline_index != 0 : true;
     const float control_height = vxui_demo_control_height( renderer, ctx->locale );
     const float viewport_width = std::max( 0.0f, ( float ) ctx->cfg.screen_width - VXUI_DEMO_LAYOUT_OUTER_PADDING * 2.0f );
     const vxui_demo_surface_metrics surface_metrics = vxui_demo_compute_surface_metrics( viewport_width, ctx->locale, VXUI_DEMO_SURFACE_CREDITS );
     const float surface_max_height = std::max( 0.0f, ( float ) ctx->cfg.screen_height - VXUI_DEMO_LAYOUT_OUTER_PADDING * 2.0f );
 
-    vxui_demo_emit_screen_surface( ctx, "credits", "credits.surface", surface_metrics.surface_width, surface_max_height, rtl, [&]() {
+    vxui_demo_emit_screen_surface( ctx, "credits", "credits.surface", surface_metrics.surface_width, surface_max_height, rtl, background_scanline, [&]() {
         VXUI( ctx, "credits.header", {
             .layout = {
                 .sizing = { CLAY_SIZING_GROW( 0 ), CLAY_SIZING_FIT( 0 ) },
@@ -4417,13 +4825,14 @@ static void vxui_demo_render_launch_stub_screen( vxui_demo_app* app, vxui_ctx* c
 {
     const vxui_demo_command_deck_theme& theme = vxui_demo_command_deck_theme_tokens();
     const bool rtl = ctx->rtl;
+    const bool background_scanline = app ? app->scanline_index != 0 : true;
     const float progress = std::clamp( app->launch_timer / 1.4f, 0.0f, 1.0f );
     const float viewport_width = std::max( 0.0f, ( float ) ctx->cfg.screen_width - VXUI_DEMO_LAYOUT_OUTER_PADDING * 2.0f );
     const vxui_demo_surface_metrics surface_metrics = vxui_demo_compute_surface_metrics( viewport_width, ctx->locale, VXUI_DEMO_SURFACE_LAUNCH_STUB );
     const float surface_max_height = std::max( 0.0f, ( float ) ctx->cfg.screen_height - VXUI_DEMO_LAYOUT_OUTER_PADDING * 2.0f );
     const vxui_demo_mission& mission = VXUI_DEMO_MISSIONS[ std::clamp( app->selected_mission_index, 0, 3 ) ];
 
-    vxui_demo_emit_screen_surface( ctx, "launch_stub", "launch_stub.surface", surface_metrics.surface_width, surface_max_height, rtl, [&]() {
+    vxui_demo_emit_screen_surface( ctx, "launch_stub", "launch_stub.surface", surface_metrics.surface_width, surface_max_height, rtl, background_scanline, [&]() {
         VXUI( ctx, "launch_stub.header", {
             .layout = {
                 .sizing = { CLAY_SIZING_GROW( 0 ), CLAY_SIZING_FIT( 0 ) },
@@ -4462,13 +4871,14 @@ static void vxui_demo_render_results_stub_screen( vxui_demo_app* app, vxui_ctx* 
 {
     const vxui_demo_command_deck_theme& theme = vxui_demo_command_deck_theme_tokens();
     const bool rtl = ctx->rtl;
+    const bool background_scanline = app ? app->scanline_index != 0 : true;
     const float control_height = vxui_demo_control_height( renderer, ctx->locale );
     const float viewport_width = std::max( 0.0f, ( float ) ctx->cfg.screen_width - VXUI_DEMO_LAYOUT_OUTER_PADDING * 2.0f );
     const vxui_demo_surface_metrics surface_metrics = vxui_demo_compute_surface_metrics( viewport_width, ctx->locale, VXUI_DEMO_SURFACE_RESULTS_STUB );
     const float surface_max_height = std::max( 0.0f, ( float ) ctx->cfg.screen_height - VXUI_DEMO_LAYOUT_OUTER_PADDING * 2.0f );
     const vxui_demo_record& record = VXUI_DEMO_RECORDS[ std::clamp( app->records_entry_index, 0, 3 ) ];
 
-    vxui_demo_emit_screen_surface( ctx, "results_stub", "results_stub.surface", surface_metrics.surface_width, surface_max_height, rtl, [&]() {
+    vxui_demo_emit_screen_surface( ctx, "results_stub", "results_stub.surface", surface_metrics.surface_width, surface_max_height, rtl, background_scanline, [&]() {
         VXUI( ctx, "results_stub.header", {
             .layout = {
                 .sizing = { CLAY_SIZING_GROW( 0 ), CLAY_SIZING_FIT( 0 ) },

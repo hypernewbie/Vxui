@@ -196,6 +196,27 @@ It still mirrors the VEFontCache renderer stack:
 
 The test binary does not require the demo renderer path.
 
+### Canonical Screenshot Review Commands
+
+The demo now supports one-shot capture for deterministic visual review:
+
+```powershell
+.\build\vxui_demo.exe --shot --screen=main_menu --width=1280 --height=720 --out=shots\main_menu_1280x720.png
+.\build\vxui_demo.exe --shot --screen=main_menu --width=1280 --height=648 --out=shots\main_menu_1280x648.png --no-scanline
+.\build\vxui_demo.exe --shot --screen=sortie --width=1280 --height=720 --out=shots\sortie_1280x720.png
+.\build\vxui_demo.exe --shot --screen=sortie --width=1100 --height=648 --out=shots\sortie_1100x648.png --no-scanline
+.\build\vxui_demo.exe --shot --screen=settings --width=1280 --height=720 --out=shots\settings_1280x720.png --focus=scanlines
+.\build\vxui_demo.exe --shot --screen=records --width=1280 --height=720 --out=shots\records_1280x720.png --focus=run
+```
+
+Useful review toggles:
+
+- `--locale=en|ja|ar`
+- `--prompts=keyboard|gamepad`
+- `--focus=<screen-specific-row-or-control>`
+- `--compact`
+- `--no-scanline`
+
 ## Quick Start
 
 In one translation unit, define the implementations you need:

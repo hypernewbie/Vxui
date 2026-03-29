@@ -63,7 +63,7 @@ if(VXUI_BUILD_DEMO)
         ${freetype_SOURCE_DIR}/include
         ${harfbuzz_SOURCE_DIR}/src
     )
-    target_link_libraries(vxui_demo PRIVATE vxui tomlc99 freetype harfbuzz glu32)
+    target_link_libraries(vxui_demo PRIVATE vxui tomlc99 freetype harfbuzz glu32 ole32 windowscodecs)
     target_compile_definitions(vxui_demo PRIVATE
         VXUI_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}"
         VE_FONTCACHE_FREETYPE_RASTERISATION
@@ -102,6 +102,7 @@ if(VXUI_BUILD_TESTS)
         tests/test_vefc_integration.cpp
         tests/test_layout_contracts.cpp
         tests/test_author_stories.cpp
+        tests/test_demo_shot.cpp
     )
     target_include_directories(vxui_tests PRIVATE
         ${freetype_SOURCE_DIR}/include
@@ -115,6 +116,11 @@ if(VXUI_BUILD_TESTS)
         VXUI_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}"
         VXUI_TEST_DATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/tests/data"
     )
+    if(VXUI_BUILD_DEMO)
+        target_compile_definitions(vxui_tests PRIVATE
+            VXUI_DEMO_EXE_PATH="$<TARGET_FILE:vxui_demo>"
+        )
+    endif()
     add_test(NAME vxui_tests COMMAND vxui_tests)
 endif()
 

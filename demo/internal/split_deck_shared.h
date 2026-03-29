@@ -16,6 +16,12 @@ struct vxui_demo_split_deck_visuals
     uint32_t section_font_id;
 };
 
+struct vxui_demo_shared_scanline
+{
+    float spacing;
+    float alpha;
+};
+
 struct vxui_demo_status_summary_cfg
 {
     const char* locale_name_key;
@@ -29,6 +35,8 @@ struct vxui_demo_sortie_screen_cfg
     vxui_menu_state* menu_state;
     int* selected_mission_index;
     int* difficulty_index;
+    float layout_surface_max_height_override;
+    bool background_scanline;
     vxui_action_fn start_fn;
     vxui_action_cfg start_cfg;
     vxui_action_fn back_fn;
@@ -43,6 +51,8 @@ struct vxui_demo_loadout_screen_cfg
     int* selected_primary_index;
     int* selected_support_index;
     int* selected_system_index;
+    float layout_surface_max_height_override;
+    bool background_scanline;
     vxui_action_fn back_fn;
     vxui_action_cfg back_cfg;
     vxui_demo_status_summary_cfg status;
@@ -53,6 +63,8 @@ struct vxui_demo_archives_screen_cfg
     vxui_menu_state* menu_state;
     int* archive_category_index;
     int* archive_entry_index;
+    float layout_surface_max_height_override;
+    bool background_scanline;
     vxui_action_fn back_fn;
     vxui_action_cfg back_cfg;
     vxui_demo_status_summary_cfg status;
@@ -63,6 +75,8 @@ struct vxui_demo_records_screen_cfg
     vxui_menu_state* menu_state;
     int* records_board_index;
     int* records_entry_index;
+    float layout_surface_max_height_override;
+    bool background_scanline;
     vxui_action_fn back_fn;
     vxui_action_cfg back_cfg;
     vxui_demo_status_summary_cfg status;
@@ -277,7 +291,6 @@ inline void vxui_demo_shared_emit_status_summary( vxui_ctx* ctx, const char* id,
         },
         .backgroundColor = vxui_demo_clay_color( theme.secondary_panel_fill ),
         .cornerRadius = CLAY_CORNER_RADIUS( 10 ),
-        .border = vxui_demo_panel_border( theme.secondary_panel_border, 1 ),
     } ) {
         CLAY( vxui_demo_split_deck_hashed_id( vxui_id( primary_id.c_str() ) ), {
             .layout = {
@@ -312,7 +325,7 @@ inline void vxui_demo_shared_emit_status_summary( vxui_ctx* ctx, const char* id,
 template <typename TEmitChildren>
 inline void vxui_demo_shared_emit_screen_surface(
     vxui_ctx* ctx, const char* root_id, const char* surface_id,
-    float surface_width, float surface_max_height, bool rtl, TEmitChildren&& emit_children )
+    float surface_width, float surface_max_height, bool rtl, bool background_scanline, TEmitChildren&& emit_children )
 {
     const vxui_demo_command_deck_theme& theme = vxui_demo_command_deck_theme_tokens();
     CLAY( vxui_demo_split_deck_hashed_id( vxui_id( root_id ) ), {
@@ -324,6 +337,16 @@ inline void vxui_demo_shared_emit_screen_surface(
         },
         .backgroundColor = vxui_demo_clay_color( theme.app_background_base ),
     } ) {
+        if ( background_scanline ) {
+            const uint32_t previous_decl_id = ctx ? ctx->current_decl_id : 0u;
+            if ( ctx ) {
+                ctx->current_decl_id = vxui_id( root_id );
+            }
+            VXUI_TRAIT( VXUI_TRAIT_SCANLINE, ( vxui_demo_shared_scanline ) { .spacing = 10.0f, .alpha = theme.surface_scanline_alpha * 0.45f } );
+            if ( ctx ) {
+                ctx->current_decl_id = previous_decl_id;
+            }
+        }
         CLAY( vxui_demo_split_deck_hashed_id( vxui_id( surface_id ) ), {
             .layout = {
                 .sizing = { CLAY_SIZING_FIXED( surface_width ), CLAY_SIZING_GROW( 0, surface_max_height ) },
@@ -445,8 +468,12 @@ inline void vxui_demo_render_sortie_screen_shared( vxui_ctx* ctx, const vxui_dem
     const bool rtl = ctx->rtl;
     const float viewport_width = std::max( 0.0f, ( float ) ctx->cfg.screen_width - VXUI_DEMO_LAYOUT_OUTER_PADDING * 2.0f );
     const float surface_max_height = std::max( 0.0f, ( float ) ctx->cfg.screen_height - VXUI_DEMO_LAYOUT_OUTER_PADDING * 2.0f );
+    const float layout_surface_max_height =
+        cfg.layout_surface_max_height_override > 0.0f
+        ? std::min( surface_max_height, cfg.layout_surface_max_height_override )
+        : surface_max_height;
     const vxui_demo_split_deck_layout_spec layout =
-        vxui_demo_resolve_split_deck_layout( VXUI_DEMO_SURFACE_SORTIE, viewport_width, surface_max_height, ctx->locale );
+        vxui_demo_resolve_split_deck_layout( VXUI_DEMO_SURFACE_SORTIE, viewport_width, layout_surface_max_height, ctx->locale );
     vxui_menu_style form_style = vxui_demo_shared_menu_style_form_deck( visuals, 110.0f );
     form_style.body_font_size = 20.0f;
     form_style.secondary_font_size = 16.0f;
@@ -454,7 +481,7 @@ inline void vxui_demo_render_sortie_screen_shared( vxui_ctx* ctx, const vxui_dem
     form_style.row_height = 44.0f;
     form_style.row_gap = 6.0f;
 
-    vxui_demo_shared_emit_screen_surface( ctx, "sortie", "sortie.surface", layout.surface.surface_width, layout.surface_max_height, rtl, [&]() {
+    vxui_demo_shared_emit_screen_surface( ctx, "sortie", "sortie.surface", layout.surface.surface_width, layout.surface_max_height, rtl, cfg.background_scanline, [&]() {
         vxui_demo_shared_emit_screen_header( ctx, "sortie.header", "menu.sortie", visuals, 48.0f );
 
         VXUI( ctx, "sortie.deck", {
@@ -571,11 +598,15 @@ inline void vxui_demo_render_loadout_screen_shared( vxui_ctx* ctx, const vxui_de
     const bool rtl = ctx->rtl;
     const float viewport_width = std::max( 0.0f, ( float ) ctx->cfg.screen_width - VXUI_DEMO_LAYOUT_OUTER_PADDING * 2.0f );
     const float surface_max_height = std::max( 0.0f, ( float ) ctx->cfg.screen_height - VXUI_DEMO_LAYOUT_OUTER_PADDING * 2.0f );
+    const float layout_surface_max_height =
+        cfg.layout_surface_max_height_override > 0.0f
+        ? std::min( surface_max_height, cfg.layout_surface_max_height_override )
+        : surface_max_height;
     const vxui_demo_split_deck_layout_spec layout =
-        vxui_demo_resolve_split_deck_layout( VXUI_DEMO_SURFACE_LOADOUT, viewport_width, surface_max_height, ctx->locale );
+        vxui_demo_resolve_split_deck_layout( VXUI_DEMO_SURFACE_LOADOUT, viewport_width, layout_surface_max_height, ctx->locale );
     vxui_menu_style form_style = vxui_demo_shared_menu_style_form_deck( visuals, 136.0f );
 
-    vxui_demo_shared_emit_screen_surface( ctx, "loadout", "loadout.surface", layout.surface.surface_width, layout.surface_max_height, rtl, [&]() {
+    vxui_demo_shared_emit_screen_surface( ctx, "loadout", "loadout.surface", layout.surface.surface_width, layout.surface_max_height, rtl, cfg.background_scanline, [&]() {
         vxui_demo_shared_emit_screen_header( ctx, "loadout.header", "menu.loadout", visuals, 46.0f );
 
         VXUI( ctx, "loadout.deck", {
@@ -642,7 +673,6 @@ inline void vxui_demo_render_loadout_screen_shared( vxui_ctx* ctx, const vxui_de
                         },
                         .backgroundColor = vxui_demo_clay_color( theme.secondary_panel_fill ),
                         .cornerRadius = CLAY_CORNER_RADIUS( 12 ),
-                        .border = vxui_demo_panel_border( theme.secondary_panel_border, 1 ),
                     } ) {
                         VXUI_LABEL( ctx, ship.name, vxui_demo_text_style( visuals.title_font_id, 40.0f, theme.title_text ) );
                         VXUI_LABEL( ctx, ship.class_name, vxui_demo_text_style( visuals.section_font_id, 24.0f, theme.accent_cool ) );
@@ -658,7 +688,6 @@ inline void vxui_demo_render_loadout_screen_shared( vxui_ctx* ctx, const vxui_de
                         },
                         .backgroundColor = vxui_demo_clay_color( theme.secondary_panel_fill ),
                         .cornerRadius = CLAY_CORNER_RADIUS( 12 ),
-                        .border = vxui_demo_panel_border( theme.secondary_panel_border, 1 ),
                     } ) {
                             vxui_demo_shared_emit_stat_bar( ctx, visuals, "loadout.stat.speed", "Speed", ship.speed );
                             vxui_demo_shared_emit_stat_bar( ctx, visuals, "loadout.stat.shield", "Shield", ship.shield );
@@ -700,11 +729,15 @@ inline void vxui_demo_render_archives_screen_shared( vxui_ctx* ctx, const vxui_d
     const bool rtl = ctx->rtl;
     const float viewport_width = std::max( 0.0f, ( float ) ctx->cfg.screen_width - VXUI_DEMO_LAYOUT_OUTER_PADDING * 2.0f );
     const float surface_max_height = std::max( 0.0f, ( float ) ctx->cfg.screen_height - VXUI_DEMO_LAYOUT_OUTER_PADDING * 2.0f );
+    const float layout_surface_max_height =
+        cfg.layout_surface_max_height_override > 0.0f
+        ? std::min( surface_max_height, cfg.layout_surface_max_height_override )
+        : surface_max_height;
     const vxui_demo_split_deck_layout_spec layout =
-        vxui_demo_resolve_split_deck_layout( VXUI_DEMO_SURFACE_ARCHIVES, viewport_width, surface_max_height, ctx->locale );
+        vxui_demo_resolve_split_deck_layout( VXUI_DEMO_SURFACE_ARCHIVES, viewport_width, layout_surface_max_height, ctx->locale );
     vxui_menu_style form_style = vxui_demo_shared_menu_style_form_deck( visuals, 132.0f );
 
-    vxui_demo_shared_emit_screen_surface( ctx, "archives", "archives.surface", layout.surface.surface_width, layout.surface_max_height, rtl, [&]() {
+    vxui_demo_shared_emit_screen_surface( ctx, "archives", "archives.surface", layout.surface.surface_width, layout.surface_max_height, rtl, cfg.background_scanline, [&]() {
         vxui_demo_shared_emit_screen_header( ctx, "archives.header", "menu.archives", visuals, 46.0f );
 
         VXUI( ctx, "archives.deck", {
@@ -809,14 +842,18 @@ inline void vxui_demo_render_records_screen_shared( vxui_ctx* ctx, const vxui_de
     const bool rtl = ctx->rtl;
     const float viewport_width = std::max( 0.0f, ( float ) ctx->cfg.screen_width - VXUI_DEMO_LAYOUT_OUTER_PADDING * 2.0f );
     const float surface_max_height = std::max( 0.0f, ( float ) ctx->cfg.screen_height - VXUI_DEMO_LAYOUT_OUTER_PADDING * 2.0f );
+    const float layout_surface_max_height =
+        cfg.layout_surface_max_height_override > 0.0f
+        ? std::min( surface_max_height, cfg.layout_surface_max_height_override )
+        : surface_max_height;
     const vxui_demo_split_deck_layout_spec layout =
-        vxui_demo_resolve_split_deck_layout( VXUI_DEMO_SURFACE_RECORDS, viewport_width, surface_max_height, ctx->locale );
+        vxui_demo_resolve_split_deck_layout( VXUI_DEMO_SURFACE_RECORDS, viewport_width, layout_surface_max_height, ctx->locale );
     if ( cfg.records_entry_index ) {
         *cfg.records_entry_index = std::clamp( *cfg.records_entry_index, 0, 3 );
     }
     vxui_menu_style form_style = vxui_demo_shared_menu_style_form_deck( visuals, 132.0f );
 
-    vxui_demo_shared_emit_screen_surface( ctx, "records", "records.surface", layout.surface.surface_width, layout.surface_max_height, rtl, [&]() {
+    vxui_demo_shared_emit_screen_surface( ctx, "records", "records.surface", layout.surface.surface_width, layout.surface_max_height, rtl, cfg.background_scanline, [&]() {
         vxui_demo_shared_emit_screen_header( ctx, "records.header", "menu.records", visuals, 46.0f );
 
         VXUI( ctx, "records.deck", {

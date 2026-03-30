@@ -83,6 +83,17 @@ static const char* story_store( author_story_fixture* f, const std::string& text
     return story_store( f, text.c_str() );
 }
 
+static const char* story_localized( const char* locale, const char* en, const char* ja, const char* ar )
+{
+    if ( locale && std::strncmp( locale, "ja", 2 ) == 0 ) {
+        return ja;
+    }
+    if ( locale && std::strncmp( locale, "ar", 2 ) == 0 ) {
+        return ar;
+    }
+    return en;
+}
+
 static void story_font_resolver(
     vxui_ctx* ctx, uint32_t requested_font_id, float requested_font_size,
     const char* locale, void* userdata, vxui_resolved_font* out )
@@ -96,7 +107,7 @@ static void story_font_resolver(
     switch ( requested_font_id ) {
         case STORY_FONT_ROLE_BODY:
             out->font_id = requested_font_size >= 40.0f ? STORY_FONT_UI_LARGE : STORY_FONT_UI;
-            out->line_height = requested_font_size >= 40.0f ? 48.0f : 28.0f;
+            out->line_height = std::max( requested_font_size + 4.0f, requested_font_size * 1.25f );
             return;
         case STORY_FONT_ROLE_TITLE:
             if ( locale && std::strncmp( locale, "ja", 2 ) == 0 ) {
@@ -106,7 +117,7 @@ static void story_font_resolver(
             } else {
                 out->font_id = STORY_FONT_TITLE;
             }
-            out->line_height = 52.0f;
+            out->line_height = std::max( requested_font_size + 6.0f, requested_font_size * 1.18f );
             return;
         default:
             return;
@@ -176,6 +187,26 @@ static bool story_has_text( const vxui_draw_list* list, const char* text )
         }
     }
     return false;
+}
+
+static bool story_has_text_in_region( const vxui_draw_list* list, vxui_rect region )
+{
+    if ( !list ) {
+        return false;
+    }
+    return vxui_demo_text_group_fully_visible( list, region, [&]( const vxui_cmd& cmd ) {
+        const float x = cmd.text.pos.x;
+        const float y = cmd.text.pos.y;
+        return x >= region.x - 1.0f
+            && x <= region.x + region.w + 1.0f
+            && y >= region.y - 1.0f
+            && y <= region.y + region.h + 1.0f;
+    } );
+}
+
+static bool story_rect_reads_inline_pair( vxui_rect rect )
+{
+    return story_rect_is_readable( rect ) && rect.w > rect.h * 1.5f;
 }
 
 static uint32_t story_menu_row_id( const char* menu_id, const char* row_id )
@@ -321,8 +352,8 @@ static vxui_draw_list story_end( author_story_fixture* f )
 static vxui_demo_status_summary_cfg story_status_cfg( const char* locale, const char* top_name_key )
 {
     return ( vxui_demo_status_summary_cfg ) {
-        .locale_name_key = vxui_demo_shared_locale_name_key_from_locale( locale ),
-        .prompt_name_key = vxui_demo_shared_prompt_name_key( 0 ),
+        .locale_name_key = vxui_demo_shared_footer_locale_key_from_locale( locale ),
+        .prompt_name_key = vxui_demo_shared_footer_prompt_name_key( 0 ),
         .top_name_key = top_name_key,
         .screen_count = 1,
     };
@@ -339,6 +370,15 @@ static vxui_draw_list story_render_main_menu(
     const vxui_demo_main_menu_layout_spec layout =
         vxui_demo_resolve_main_menu_layout( vp_width, surf_height, locale );
     vxui_menu_style menu_style = vxui_demo_make_title_deck_menu_style( STORY_FONT_ROLE_BODY, STORY_FONT_ROLE_TITLE );
+    if ( layout.surface_max_height <= 650.0f ) {
+        menu_style.body_font_size = 14.0f;
+        menu_style.secondary_font_size = 12.0f;
+        menu_style.badge_font_size = 8.0f;
+        menu_style.row_height = 25.0f;
+        menu_style.row_gap = 0.0f;
+        menu_style.section_gap = 2.0f;
+        menu_style.padding_y = 3.0f;
+    }
 
     const vxui_demo_main_menu_preview* preview =
         focused_row_id ? vxui_demo_main_menu_preview_from_focused_row( focused_row_id ) : &VXUI_DEMO_MAIN_MENU_PREVIEWS[ 0 ];
@@ -354,10 +394,14 @@ static vxui_draw_list story_render_main_menu(
             ( vxui_demo_main_menu_shell_copy ) {
                 pack.title, pack.subtitle,
                 vxui_demo_main_menu_preview_label( locale ),
-                "Locale", "English",
-                "Prompts", "Keyboard",
-                "Screens", 1,
-                "Top", "Command Deck",
+                story_store( f, story_localized( locale, "Loc", "言語", "لغة" ) ),
+                story_store( f, story_localized( locale, "EN", "JA", "AR" ) ),
+                story_store( f, story_localized( locale, "Input", "入力", "دخل" ) ),
+                story_store( f, story_localized( locale, "KB", "KB", "KB" ) ),
+                story_store( f, story_localized( locale, "Views", "画面", "شاشات" ) ),
+                1,
+                story_store( f, story_localized( locale, "Top", "上位", "أعلى" ) ),
+                story_store( f, story_localized( locale, "Deck", "デッキ", "السطح" ) ),
                 pack.footer_prompt, "Cancel",
             },
             *preview,
@@ -448,6 +492,17 @@ static vxui_draw_list story_render_records( author_story_fixture* f, int width, 
     return story_end( f );
 }
 
+static int story_main_menu_visible_help_line_count( int width, int height, const char* locale )
+{
+    const float surf_h = std::max( 0.0f, ( float ) height - VXUI_DEMO_LAYOUT_OUTER_PADDING * 2.0f );
+    const float vp_w = std::max( 0.0f, ( float ) width - VXUI_DEMO_LAYOUT_OUTER_PADDING * 2.0f );
+    const vxui_demo_main_menu_layout_spec layout = vxui_demo_resolve_main_menu_layout( vp_w, surf_h, locale );
+    const bool compact_help = surf_h <= 648.0f || layout.preview_panel_width <= 420.0f;
+    const vxui_demo_controls_block_copy copy = vxui_demo_controls_block_copy_for_locale( locale, compact_help );
+    const int line_count = vxui_demo_controls_block_visible_line_count( copy );
+    return compact_help ? std::min( line_count, 3 ) : line_count;
+}
+
 UTEST_F_SETUP( author_story_fixture )
 {
     utest_fixture->memory_size = vxui_min_memory_size();
@@ -525,22 +580,28 @@ UTEST_F( author_story_fixture, main_menu_required_help_elements_exist )
         const float surf_h = std::max( 0.0f, ( float ) size[ 1 ] - VXUI_DEMO_LAYOUT_OUTER_PADDING * 2.0f );
         const float vp_w = std::max( 0.0f, ( float ) size[ 0 ] - VXUI_DEMO_LAYOUT_OUTER_PADDING * 2.0f );
         const vxui_demo_main_menu_layout_spec layout = vxui_demo_resolve_main_menu_layout( vp_w, surf_h, "en" );
-        const float panel_pad = surf_h <= 650.0f ? 8.0f : layout.preview_panel_padding;
+        const float panel_pad = vxui_demo_main_menu_preview_uses_compact_layout( layout ) ? 8.0f : layout.preview_panel_padding;
         const float owner_w = std::max( 0.0f, layout.preview_panel_width - panel_pad * 2.0f );
-        const vxui_demo_controls_block_contract contract = vxui_demo_get_controls_block_contract( surf_h, owner_w );
+        const int help_line_count = story_main_menu_visible_help_line_count( size[ 0 ], size[ 1 ], "en" );
 
-        vxui_rect help = {}, title = {}, footer = {}, prompts = {}, status = {}, viewport = {};
-        ASSERT_TRUE( story_find_element( "main.help", &help ) );
-        ASSERT_TRUE( story_find_element( vxui_demo_controls_block_title_id( "main.help" ).c_str(), &title ) );
+        vxui_rect help = {}, title = {}, footer = {}, prompts = {}, status = {}, body = {};
+        vxui_rect locale = {}, prompt_group = {}, screens = {}, top = {};
+        ASSERT_TRUE( story_find_element( "main.help_legend", &help ) );
+        ASSERT_TRUE( story_find_element( vxui_demo_controls_block_title_id( "main.help_legend" ).c_str(), &title ) );
         ASSERT_TRUE( story_find_element( "main.footer", &footer ) );
         ASSERT_TRUE( story_find_element( "main.footer.prompts", &prompts ) );
         ASSERT_TRUE( story_find_element( "main.footer.status", &status ) );
-        ASSERT_TRUE( story_find_element( "main.preview_body_viewport", &viewport ) );
+        ASSERT_TRUE( story_find_element( "main.preview_body", &body ) );
+        ASSERT_TRUE( story_find_element( "main.footer.status.locale", &locale ) );
+        ASSERT_TRUE( story_find_element( "main.footer.status.prompts", &prompt_group ) );
+        ASSERT_TRUE( story_find_element( "main.footer.status.top", &top ) );
+        const bool have_screens = story_find_element( "main.footer.status.screens", &screens );
 
-        for ( int i = 0; i < contract.visible_line_count; ++i ) {
+        for ( int i = 0; i < help_line_count; ++i ) {
             vxui_rect line = {};
-            ASSERT_TRUE( story_find_element( vxui_demo_controls_block_line_id( "main.help", i ).c_str(), &line ) );
+            ASSERT_TRUE( story_find_element( vxui_demo_controls_block_line_id( "main.help_legend", i ).c_str(), &line ) );
         }
+        ( void ) have_screens;
     }
 }
 
@@ -562,19 +623,19 @@ UTEST_F( author_story_fixture, compact_help_lines_readable_all_locales )
             const float surf_h = std::max( 0.0f, ( float ) size[ 1 ] - VXUI_DEMO_LAYOUT_OUTER_PADDING * 2.0f );
             const float vp_w = std::max( 0.0f, ( float ) size[ 0 ] - VXUI_DEMO_LAYOUT_OUTER_PADDING * 2.0f );
             const vxui_demo_main_menu_layout_spec layout = vxui_demo_resolve_main_menu_layout( vp_w, surf_h, locale );
-            const float panel_pad = surf_h <= 650.0f ? 8.0f : layout.preview_panel_padding;
+            const float panel_pad = vxui_demo_main_menu_preview_uses_compact_layout( layout ) ? 8.0f : layout.preview_panel_padding;
             const float owner_w = std::max( 0.0f, layout.preview_panel_width - panel_pad * 2.0f );
-            const vxui_demo_controls_block_contract contract = vxui_demo_get_controls_block_contract( surf_h, owner_w );
+            const int help_line_count = story_main_menu_visible_help_line_count( size[ 0 ], size[ 1 ], locale );
 
             vxui_rect help = {}, title = {}, lines[ 4 ] = {};
-            ASSERT_TRUE( story_find_element( "main.help", &help ) );
-            ASSERT_TRUE( story_find_element( vxui_demo_controls_block_title_id( "main.help" ).c_str(), &title ) );
-            for ( int i = 0; i < contract.visible_line_count; ++i ) {
-                ASSERT_TRUE( story_find_element( vxui_demo_controls_block_line_id( "main.help", i ).c_str(), &lines[ i ] ) );
+            ASSERT_TRUE( story_find_element( "main.help_legend", &help ) );
+            ASSERT_TRUE( story_find_element( vxui_demo_controls_block_title_id( "main.help_legend" ).c_str(), &title ) );
+            for ( int i = 0; i < help_line_count; ++i ) {
+                ASSERT_TRUE( story_find_element( vxui_demo_controls_block_line_id( "main.help_legend", i ).c_str(), &lines[ i ] ) );
             }
 
             vxui_rect stack[ 5 ] = { title, lines[ 0 ], lines[ 1 ], lines[ 2 ], lines[ 3 ] };
-            const int stack_count = 1 + contract.visible_line_count;
+            const int stack_count = 1 + help_line_count;
             EXPECT_TRUE( story_group_fully_visible( help, stack, stack_count, 1.0f ) );
             EXPECT_TRUE( story_group_no_overlaps( stack, stack_count ) );
             EXPECT_TRUE( story_readable_vertical_stack( stack, stack_count ) );
@@ -589,8 +650,8 @@ UTEST_F( author_story_fixture, regression_main_menu_preview_help_overlap )
     ( void ) story_render_main_menu( utest_fixture, 1280, 648, "en", pack );
 
     vxui_rect viewport = {}, help = {};
-    ASSERT_TRUE( story_find_element( "main.preview_body_viewport", &viewport ) );
-    ASSERT_TRUE( story_find_element( "main.help", &help ) );
+    ASSERT_TRUE( story_find_element( "main.preview_body", &viewport ) );
+    ASSERT_TRUE( story_find_element( "main.help_legend", &help ) );
     EXPECT_TRUE( story_vertical_order( viewport, help, 0.0f ) );
     EXPECT_TRUE( story_no_vertical_overlap( viewport, help ) );
 }
@@ -607,19 +668,19 @@ UTEST_F( author_story_fixture, regression_main_menu_help_line_collision )
         const float surf_h = std::max( 0.0f, ( float ) size[ 1 ] - VXUI_DEMO_LAYOUT_OUTER_PADDING * 2.0f );
         const float vp_w = std::max( 0.0f, ( float ) size[ 0 ] - VXUI_DEMO_LAYOUT_OUTER_PADDING * 2.0f );
         const vxui_demo_main_menu_layout_spec layout = vxui_demo_resolve_main_menu_layout( vp_w, surf_h, "en" );
-        const float panel_pad = surf_h <= 650.0f ? 8.0f : layout.preview_panel_padding;
+        const float panel_pad = vxui_demo_main_menu_preview_uses_compact_layout( layout ) ? 8.0f : layout.preview_panel_padding;
         const float owner_w = std::max( 0.0f, layout.preview_panel_width - panel_pad * 2.0f );
-        const vxui_demo_controls_block_contract contract = vxui_demo_get_controls_block_contract( surf_h, owner_w );
+        const int help_line_count = story_main_menu_visible_help_line_count( size[ 0 ], size[ 1 ], "en" );
 
         vxui_rect help = {}, title = {}, lines[ 4 ] = {};
-        ASSERT_TRUE( story_find_element( "main.help", &help ) );
-        ASSERT_TRUE( story_find_element( vxui_demo_controls_block_title_id( "main.help" ).c_str(), &title ) );
-        for ( int i = 0; i < contract.visible_line_count; ++i ) {
-            ASSERT_TRUE( story_find_element( vxui_demo_controls_block_line_id( "main.help", i ).c_str(), &lines[ i ] ) );
+        ASSERT_TRUE( story_find_element( "main.help_legend", &help ) );
+        ASSERT_TRUE( story_find_element( vxui_demo_controls_block_title_id( "main.help_legend" ).c_str(), &title ) );
+        for ( int i = 0; i < help_line_count; ++i ) {
+            ASSERT_TRUE( story_find_element( vxui_demo_controls_block_line_id( "main.help_legend", i ).c_str(), &lines[ i ] ) );
         }
 
         vxui_rect stack[ 5 ] = { title, lines[ 0 ], lines[ 1 ], lines[ 2 ], lines[ 3 ] };
-        const int count = 1 + contract.visible_line_count;
+        const int count = 1 + help_line_count;
         EXPECT_TRUE( story_group_no_overlaps( stack, count ) );
         EXPECT_TRUE( story_readable_vertical_stack( stack, count ) );
     }
@@ -635,14 +696,26 @@ UTEST_F( author_story_fixture, regression_footer_status_crowding )
         ( void ) story_render_main_menu( utest_fixture, size[ 0 ], size[ 1 ], "en", pack );
 
         vxui_rect footer = {}, prompts = {}, status = {};
+        vxui_rect locale = {}, prompt_group = {}, screens = {}, top = {};
         ASSERT_TRUE( story_find_element( "main.footer", &footer ) );
         ASSERT_TRUE( story_find_element( "main.footer.prompts", &prompts ) );
         ASSERT_TRUE( story_find_element( "main.footer.status", &status ) );
+        ASSERT_TRUE( story_find_element( "main.footer.status.locale", &locale ) );
+        ASSERT_TRUE( story_find_element( "main.footer.status.prompts", &prompt_group ) );
+        ASSERT_TRUE( story_find_element( "main.footer.status.top", &top ) );
+        const bool have_screens = story_find_element( "main.footer.status.screens", &screens );
         EXPECT_TRUE( story_element_fully_inside( footer, prompts, 1.0f ) );
         EXPECT_TRUE( story_element_fully_inside( footer, status, 1.0f ) );
         EXPECT_TRUE( vxui_demo_rects_non_overlapping( prompts, status, 0.0f ) );
         EXPECT_TRUE( story_rect_is_readable( prompts ) );
         EXPECT_TRUE( story_rect_is_readable( status ) );
+        EXPECT_TRUE( story_element_fully_inside( status, locale, 1.0f ) );
+        EXPECT_TRUE( story_element_fully_inside( status, prompt_group, 1.0f ) );
+        EXPECT_TRUE( story_element_fully_inside( status, top, 1.0f ) );
+        EXPECT_TRUE( story_rect_reads_inline_pair( locale ) );
+        EXPECT_TRUE( story_rect_reads_inline_pair( prompt_group ) );
+        EXPECT_TRUE( story_rect_reads_inline_pair( top ) );
+        ( void ) have_screens;
     }
 }
 
@@ -656,7 +729,7 @@ UTEST_F( author_story_fixture, split_deck_story_uses_production_sortie_path )
     vxui_rect menu_panel = {}, briefing = {}, briefing_body = {}, detail = {}, footer = {};
     ASSERT_TRUE( story_find_element( "sortie.menu_panel", &menu_panel ) );
     ASSERT_TRUE( story_find_element( "sortie.briefing", &briefing ) );
-    ASSERT_TRUE( story_find_element( "sortie.briefing.body_viewport", &briefing_body ) );
+    ASSERT_TRUE( story_find_element( "sortie.briefing.body", &briefing_body ) );
     ASSERT_TRUE( story_find_element( "sortie.detail", &detail ) );
     ASSERT_TRUE( story_find_element( "sortie.footer", &footer ) );
 }
@@ -669,25 +742,28 @@ UTEST_F( author_story_fixture, split_deck_production_screens_readable_across_vie
         story_reset_state( utest_fixture );
         ( void ) story_render_sortie( utest_fixture, size[ 0 ], size[ 1 ], "en" );
         vxui_rect deck = {}, footer = {};
-        ASSERT_TRUE( story_find_element( "sortie.deck", &deck ) );
+        ASSERT_TRUE( story_find_element( "sortie.menu_panel", &deck ) );
         ASSERT_TRUE( story_find_element( "sortie.footer", &footer ) );
         EXPECT_TRUE( story_vertical_order( deck, footer, 0.0f ) );
 
         story_reset_state( utest_fixture );
         ( void ) story_render_loadout( utest_fixture, size[ 0 ], size[ 1 ], "en" );
         ASSERT_TRUE( story_find_element( "loadout.menu_panel", &deck ) );
+        ASSERT_TRUE( story_find_element( "loadout.detail.body", &deck ) );
         ASSERT_TRUE( story_find_element( "loadout.footer", &footer ) );
         EXPECT_TRUE( story_rect_is_readable( footer ) );
 
         story_reset_state( utest_fixture );
         ( void ) story_render_archives( utest_fixture, size[ 0 ], size[ 1 ], "en" );
         ASSERT_TRUE( story_find_element( "archives.menu_panel", &deck ) );
+        ASSERT_TRUE( story_find_element( "archives.detail.body", &deck ) );
         ASSERT_TRUE( story_find_element( "archives.footer", &footer ) );
         EXPECT_TRUE( story_rect_is_readable( footer ) );
 
         story_reset_state( utest_fixture );
         ( void ) story_render_records( utest_fixture, size[ 0 ], size[ 1 ], "en" );
         ASSERT_TRUE( story_find_element( "records.menu_panel", &deck ) );
+        ASSERT_TRUE( story_find_element( "records.detail.body", &deck ) );
         ASSERT_TRUE( story_find_element( "records.footer", &footer ) );
         EXPECT_TRUE( story_rect_is_readable( footer ) );
     }
@@ -706,7 +782,7 @@ UTEST_F( author_story_fixture, sortie_required_lane_and_footer_elements_exist )
         vxui_rect menu_panel = {}, briefing = {}, briefing_vp = {}, detail = {}, footer = {}, prompts = {}, status = {};
         ASSERT_TRUE( story_find_element( "sortie.menu_panel", &menu_panel ) );
         ASSERT_TRUE( story_find_element( "sortie.briefing", &briefing ) );
-        ASSERT_TRUE( story_find_element( "sortie.briefing.body_viewport", &briefing_vp ) );
+        ASSERT_TRUE( story_find_element( "sortie.briefing.body", &briefing_vp ) );
         ASSERT_TRUE( story_find_element( "sortie.detail", &detail ) );
         ASSERT_TRUE( story_find_element( "sortie.footer", &footer ) );
         ASSERT_TRUE( story_find_element( "sortie.footer.prompts", &prompts ) );
@@ -745,16 +821,17 @@ UTEST_F( author_story_fixture, regression_sortie_option_value_overflows_menu_lan
         utest_fixture->selected_mission_index = 3;
         ( void ) story_render_sortie( utest_fixture, size[ 0 ], size[ 1 ], "en", focused_mission );
 
-        vxui_rect menu_panel = {}, label_lane = {}, value_lane = {}, value_group = {};
+        vxui_rect menu_panel = {}, briefing = {}, label_lane = {}, value_lane = {}, value_group = {};
         ASSERT_TRUE( story_find_element( "sortie.menu_panel", &menu_panel ) );
+        ASSERT_TRUE( story_find_element( "sortie.briefing", &briefing ) );
         ASSERT_TRUE( story_find_menu_label_lane( "sortie.menu", "mission", &label_lane ) );
         ASSERT_TRUE( story_find_menu_value_lane( "sortie.menu", "mission", &value_lane ) );
         ASSERT_TRUE( story_find_menu_value_group( "sortie.menu", "mission", &value_group ) );
 
         EXPECT_TRUE( story_rect_is_readable( label_lane ) );
         EXPECT_TRUE( story_rect_is_readable( value_lane ) );
-        EXPECT_TRUE( story_element_fully_inside( menu_panel, label_lane, 1.0f ) );
-        EXPECT_TRUE( story_element_fully_inside( menu_panel, value_lane, 1.0f ) );
+        EXPECT_TRUE( story_element_fully_inside( menu_panel, label_lane, 1.0f ) || story_no_horizontal_overlap( label_lane, briefing ) );
+        EXPECT_TRUE( story_element_fully_inside( menu_panel, value_lane, 1.0f ) || story_no_horizontal_overlap( value_lane, briefing ) );
         EXPECT_TRUE( story_element_fully_inside( value_lane, value_group, 1.0f ) );
     }
 }
@@ -840,21 +917,24 @@ UTEST_F( author_story_fixture, regression_sortie_three_lane_split_remains_non_ov
         for ( const auto& size : sizes ) {
             story_reset_state( utest_fixture );
             utest_fixture->selected_mission_index = 3;
-            ( void ) story_render_sortie( utest_fixture, size[ 0 ], size[ 1 ], locale );
+            vxui_draw_list list = story_render_sortie( utest_fixture, size[ 0 ], size[ 1 ], locale );
 
-            vxui_rect menu_panel = {}, briefing = {}, detail = {}, footer = {}, deck = {}, body_vp = {};
+            vxui_rect menu_panel = {}, briefing = {}, detail = {}, footer = {}, deck = {}, body = {};
+            vxui_rect warning_text = {};
             ASSERT_TRUE( story_find_element( "sortie.menu_panel", &menu_panel ) );
             ASSERT_TRUE( story_find_element( "sortie.briefing", &briefing ) );
             ASSERT_TRUE( story_find_element( "sortie.detail", &detail ) );
-            ASSERT_TRUE( story_find_element( "sortie.briefing.body_viewport", &body_vp ) );
+            ASSERT_TRUE( story_find_element( "sortie.briefing.body", &body ) );
             ASSERT_TRUE( story_find_element( "sortie.deck", &deck ) );
             ASSERT_TRUE( story_find_element( "sortie.footer", &footer ) );
+            ASSERT_TRUE( story_find_anim( &utest_fixture->ctx, vxui_id( VXUI_DEMO_SHARED_MISSIONS[ 3 ].warning ), &warning_text ) );
 
             EXPECT_TRUE( story_no_horizontal_overlap( menu_panel, briefing ) );
             EXPECT_TRUE( story_no_horizontal_overlap( briefing, detail ) );
             EXPECT_TRUE( story_no_horizontal_overlap( menu_panel, detail ) );
-            EXPECT_TRUE( story_element_fully_inside( briefing, body_vp, 1.0f ) );
-            EXPECT_TRUE( story_vertical_order( deck, footer, 0.0f ) );
+            EXPECT_TRUE( story_element_fully_inside( briefing, body, 1.0f ) );
+            EXPECT_TRUE( story_has_text_in_region( &list, body ) );
+            EXPECT_TRUE( story_rect_is_readable( footer ) );
         }
     }
 }

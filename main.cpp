@@ -327,7 +327,10 @@ static void vxui_demo_refresh_status( vxui_demo_app* app );
 static const char* vxui_demo_locale_code( int locale_index );
 static const char* vxui_demo_locale_name_key( int locale_index );
 static const char* vxui_demo_prompt_name_key( int prompt_table_index );
+static const char* vxui_demo_footer_locale_key( int locale_index );
+static const char* vxui_demo_footer_prompt_key( int prompt_table_index );
 static const char* vxui_demo_screen_name_key( const char* screen_name );
+static const char* vxui_demo_footer_top_name( const vxui_demo_app* app, const vxui_ctx* ctx );
 static bool vxui_demo_locale_matches( const char* locale, const char* prefix );
 static vxui_demo_font_metrics vxui_demo_resolve_font_metrics( const vxui_demo_renderer* renderer, uint32_t requested_font_id, float requested_font_size, const char* locale );
 static void vxui_demo_font_resolver( vxui_ctx* ctx, uint32_t requested_font_id, float requested_font_size, const char* locale, void* userdata, vxui_resolved_font* out );
@@ -503,10 +506,10 @@ static const vxui_demo_localized_text VXUI_DEMO_COMMAND_DECK_TEXT[] = {
     { "credits.section.stack", "Stack", "スタック", "المكدس" },
     { "launch.prompt", "Proceed to debrief", "戦果報告へ", "إلى التقرير" },
     { "results.prompt", "Confirm to return", "決定で戻る", "تأكيد للعودة" },
-    { "badge.selected", "Selected", "選択中", "محدد" },
+    { "badge.selected", "Sel", "選択中", "محدد" },
     { "badge.locked", "Locked", "ロック", "مغلق" },
     { "badge.demo", "Demo", "デモ", "عرض" },
-    { "badge.recommended", "Recommended", "推奨", "موصى به" },
+    { "badge.recommended", "Rec", "推奨", "موصى به" },
 };
 
 static const vxui_demo_mission VXUI_DEMO_MISSIONS[] = {
@@ -727,11 +730,20 @@ static const char* vxui_demo_text( const char* key, void* userdata )
         if ( std::strcmp( key, "status.label.prompts" ) == 0 ) return "プロンプト";
         if ( std::strcmp( key, "status.label.screens" ) == 0 ) return "画面数";
         if ( std::strcmp( key, "status.label.top" ) == 0 ) return "最上位";
+        if ( std::strcmp( key, "status.short.locale" ) == 0 ) return "言語";
+        if ( std::strcmp( key, "status.short.prompts" ) == 0 ) return "入力";
+        if ( std::strcmp( key, "status.short.screens" ) == 0 ) return "画面";
+        if ( std::strcmp( key, "status.short.top" ) == 0 ) return "上位";
         if ( std::strcmp( key, "locale.name.en" ) == 0 ) return "英語";
         if ( std::strcmp( key, "locale.name.ja" ) == 0 ) return "日本語";
         if ( std::strcmp( key, "locale.name.ar" ) == 0 ) return "アラビア語";
+        if ( std::strcmp( key, "locale.short.en" ) == 0 ) return "EN";
+        if ( std::strcmp( key, "locale.short.ja" ) == 0 ) return "JA";
+        if ( std::strcmp( key, "locale.short.ar" ) == 0 ) return "AR";
         if ( std::strcmp( key, "prompt.name.keyboard" ) == 0 ) return "キーボード";
         if ( std::strcmp( key, "prompt.name.gamepad" ) == 0 ) return "ゲームパッド";
+        if ( std::strcmp( key, "prompt.short.keyboard" ) == 0 ) return "KB";
+        if ( std::strcmp( key, "prompt.short.gamepad" ) == 0 ) return "Pad";
         if ( std::strcmp( key, "screen.none" ) == 0 ) return "なし";
         if ( std::strcmp( key, "common.none" ) == 0 ) return "なし";
         if ( std::strcmp( key, "slot.0" ) == 0 ) return "オートセーブ";
@@ -784,11 +796,20 @@ static const char* vxui_demo_text( const char* key, void* userdata )
         if ( std::strcmp( key, "status.label.prompts" ) == 0 ) return "الأزرار";
         if ( std::strcmp( key, "status.label.screens" ) == 0 ) return "الشاشات";
         if ( std::strcmp( key, "status.label.top" ) == 0 ) return "الأعلى";
+        if ( std::strcmp( key, "status.short.locale" ) == 0 ) return "لغة";
+        if ( std::strcmp( key, "status.short.prompts" ) == 0 ) return "دخل";
+        if ( std::strcmp( key, "status.short.screens" ) == 0 ) return "شاشات";
+        if ( std::strcmp( key, "status.short.top" ) == 0 ) return "أعلى";
         if ( std::strcmp( key, "locale.name.en" ) == 0 ) return "الإنجليزية";
         if ( std::strcmp( key, "locale.name.ja" ) == 0 ) return "اليابانية";
         if ( std::strcmp( key, "locale.name.ar" ) == 0 ) return "العربية";
+        if ( std::strcmp( key, "locale.short.en" ) == 0 ) return "EN";
+        if ( std::strcmp( key, "locale.short.ja" ) == 0 ) return "JA";
+        if ( std::strcmp( key, "locale.short.ar" ) == 0 ) return "AR";
         if ( std::strcmp( key, "prompt.name.keyboard" ) == 0 ) return "لوحة المفاتيح";
         if ( std::strcmp( key, "prompt.name.gamepad" ) == 0 ) return "يد التحكم";
+        if ( std::strcmp( key, "prompt.short.keyboard" ) == 0 ) return "KB";
+        if ( std::strcmp( key, "prompt.short.gamepad" ) == 0 ) return "Pad";
         if ( std::strcmp( key, "screen.none" ) == 0 ) return "لا شيء";
         if ( std::strcmp( key, "common.none" ) == 0 ) return "لا شيء";
         if ( std::strcmp( key, "slot.0" ) == 0 ) return "حفظ تلقائي";
@@ -841,11 +862,20 @@ static const char* vxui_demo_text( const char* key, void* userdata )
         if ( std::strcmp( key, "status.label.prompts" ) == 0 ) return "Prompts";
         if ( std::strcmp( key, "status.label.screens" ) == 0 ) return "Screens";
         if ( std::strcmp( key, "status.label.top" ) == 0 ) return "Top";
+        if ( std::strcmp( key, "status.short.locale" ) == 0 ) return "Loc";
+        if ( std::strcmp( key, "status.short.prompts" ) == 0 ) return "Input";
+        if ( std::strcmp( key, "status.short.screens" ) == 0 ) return "Views";
+        if ( std::strcmp( key, "status.short.top" ) == 0 ) return "Top";
         if ( std::strcmp( key, "locale.name.en" ) == 0 ) return "English";
         if ( std::strcmp( key, "locale.name.ja" ) == 0 ) return "Japanese";
         if ( std::strcmp( key, "locale.name.ar" ) == 0 ) return "Arabic";
+        if ( std::strcmp( key, "locale.short.en" ) == 0 ) return "EN";
+        if ( std::strcmp( key, "locale.short.ja" ) == 0 ) return "JA";
+        if ( std::strcmp( key, "locale.short.ar" ) == 0 ) return "AR";
         if ( std::strcmp( key, "prompt.name.keyboard" ) == 0 ) return "Keyboard";
         if ( std::strcmp( key, "prompt.name.gamepad" ) == 0 ) return "Gamepad";
+        if ( std::strcmp( key, "prompt.short.keyboard" ) == 0 ) return "KB";
+        if ( std::strcmp( key, "prompt.short.gamepad" ) == 0 ) return "Pad";
         if ( std::strcmp( key, "screen.none" ) == 0 ) return "none";
         if ( std::strcmp( key, "common.none" ) == 0 ) return "none";
         if ( std::strcmp( key, "slot.0" ) == 0 ) return "Autosave";
@@ -892,9 +922,26 @@ static const char* vxui_demo_locale_name_key( int locale_index )
     }
 }
 
+static const char* vxui_demo_footer_locale_key( int locale_index )
+{
+    switch ( locale_index ) {
+        case VXUI_DEMO_LOCALE_JAPANESE:
+            return "locale.short.ja";
+        case VXUI_DEMO_LOCALE_ARABIC:
+            return "locale.short.ar";
+        default:
+            return "locale.short.en";
+    }
+}
+
 static const char* vxui_demo_prompt_name_key( int prompt_table_index )
 {
     return prompt_table_index == 0 ? "prompt.name.keyboard" : "prompt.name.gamepad";
+}
+
+static const char* vxui_demo_footer_prompt_key( int prompt_table_index )
+{
+    return prompt_table_index == 0 ? "prompt.short.keyboard" : "prompt.short.gamepad";
 }
 
 static const char* vxui_demo_screen_name_key( const char* screen_name )
@@ -925,6 +972,51 @@ static const char* vxui_demo_screen_name_key( const char* screen_name )
         case VXUI_DEMO_SCREEN_UNKNOWN:
         default:
             return "screen.none";
+    }
+}
+
+static const char* vxui_demo_footer_top_name( const vxui_demo_app* app, const vxui_ctx* ctx )
+{
+    const char* screen_name = vxui_demo_top_screen_name( ctx );
+    switch ( vxui_demo_screen_kind_from_name( screen_name ) ) {
+        case VXUI_DEMO_SCREEN_MAIN_MENU:
+            if ( app && app->locale_index == VXUI_DEMO_LOCALE_JAPANESE ) return "デッキ";
+            if ( app && app->locale_index == VXUI_DEMO_LOCALE_ARABIC ) return "السطح";
+            return "Deck";
+        case VXUI_DEMO_SCREEN_SORTIE:
+            if ( app && app->locale_index == VXUI_DEMO_LOCALE_JAPANESE ) return "出撃";
+            if ( app && app->locale_index == VXUI_DEMO_LOCALE_ARABIC ) return "الطلعة";
+            return "Sortie";
+        case VXUI_DEMO_SCREEN_LOADOUT:
+            if ( app && app->locale_index == VXUI_DEMO_LOCALE_JAPANESE ) return "装備";
+            if ( app && app->locale_index == VXUI_DEMO_LOCALE_ARABIC ) return "العتاد";
+            return "Loadout";
+        case VXUI_DEMO_SCREEN_ARCHIVES:
+            if ( app && app->locale_index == VXUI_DEMO_LOCALE_JAPANESE ) return "記録庫";
+            if ( app && app->locale_index == VXUI_DEMO_LOCALE_ARABIC ) return "الأرشيف";
+            return "Archives";
+        case VXUI_DEMO_SCREEN_SETTINGS:
+            if ( app && app->locale_index == VXUI_DEMO_LOCALE_JAPANESE ) return "設定";
+            if ( app && app->locale_index == VXUI_DEMO_LOCALE_ARABIC ) return "الإعدادات";
+            return "Settings";
+        case VXUI_DEMO_SCREEN_RECORDS:
+            if ( app && app->locale_index == VXUI_DEMO_LOCALE_JAPANESE ) return "記録";
+            if ( app && app->locale_index == VXUI_DEMO_LOCALE_ARABIC ) return "السجلات";
+            return "Records";
+        case VXUI_DEMO_SCREEN_CREDITS:
+            if ( app && app->locale_index == VXUI_DEMO_LOCALE_JAPANESE ) return "制作";
+            if ( app && app->locale_index == VXUI_DEMO_LOCALE_ARABIC ) return "الاعتمادات";
+            return "Credits";
+        case VXUI_DEMO_SCREEN_TITLE:
+            if ( app && app->locale_index == VXUI_DEMO_LOCALE_JAPANESE ) return "開始";
+            if ( app && app->locale_index == VXUI_DEMO_LOCALE_ARABIC ) return "العنوان";
+            return "Title";
+        case VXUI_DEMO_SCREEN_BOOT:
+            if ( app && app->locale_index == VXUI_DEMO_LOCALE_JAPANESE ) return "起動";
+            if ( app && app->locale_index == VXUI_DEMO_LOCALE_ARABIC ) return "التمهيد";
+            return "Boot";
+        default:
+            return "Demo";
     }
 }
 
@@ -4426,7 +4518,7 @@ static void vxui_demo_emit_status_panel( vxui_ctx* ctx, const char* id, const vx
 {
     const char* locale_name_key = vxui_demo_locale_name_key( app ? app->locale_index : 0 );
     const char* prompt_name_key = vxui_demo_prompt_name_key( app ? app->prompt_table_index : 0 );
-    const char* top_name_key = vxui_demo_screen_name_key( vxui_demo_top_screen_name( ctx ) );
+    const char* top_name_key = vxui_demo_footer_top_name( app, ctx );
     const int screen_count = ctx ? ctx->screen_count : 0;
     vxui_demo_emit_status_summary( ctx, id, locale_name_key, prompt_name_key, top_name_key, screen_count, rtl );
 }
@@ -4596,6 +4688,17 @@ static void vxui_demo_render_main_menu_screen( vxui_demo_app* app, vxui_ctx* ctx
         : surface_max_height;
     const vxui_demo_main_menu_layout_spec layout = vxui_demo_resolve_main_menu_layout( viewport_width, layout_surface_max_height, ctx->locale );
     vxui_menu_style menu_style = vxui_demo_menu_style_title_deck();
+    if ( layout.surface_max_height <= 650.0f ) {
+        menu_style.body_font_size = 14.0f;
+        menu_style.secondary_font_size = 12.0f;
+        menu_style.badge_font_size = 8.0f;
+        menu_style.row_height = 25.0f;
+        menu_style.row_gap = 0.0f;
+        menu_style.section_gap = 2.0f;
+        menu_style.padding_y = 3.0f;
+    }
+    vxui_menu_style command_menu_style = menu_style;
+    command_menu_style.panel_fill_color = { 0, 0, 0, 1 };
 
     vxui_demo_emit_screen_surface( ctx, "main_menu", "main.surface", layout.surface.surface_width, layout.surface_max_height, rtl, background_scanline, [&]() {
         const vxui_demo_main_menu_preview* preview = vxui_demo_current_main_menu_preview( app );
@@ -4613,21 +4716,21 @@ static void vxui_demo_render_main_menu_screen( vxui_demo_app* app, vxui_ctx* ctx
                 "menu.main",
                 "main.status_banner",
                 "main.preview",
-                "status.label.locale",
-                vxui_demo_locale_name_key( app ? app->locale_index : 0 ),
-                "status.label.prompts",
-                vxui_demo_prompt_name_key( app ? app->prompt_table_index : 0 ),
-                "status.label.screens",
+                "status.short.locale",
+                vxui_demo_footer_locale_key( app ? app->locale_index : 0 ),
+                "status.short.prompts",
+                vxui_demo_footer_prompt_key( app ? app->prompt_table_index : 0 ),
+                "status.short.screens",
                 ctx ? ctx->screen_count : 0,
-                "status.label.top",
-                vxui_demo_screen_name_key( vxui_demo_top_screen_name( ctx ) ),
+                "status.short.top",
+                vxui_demo_footer_top_name( app, ctx ),
                 "menu.confirm",
                 "menu.cancel",
             },
             *preview,
             [&]( float viewport_height ) {
                 vxui_menu_begin( ctx, &app->main_menu_state, "main.command_menu", ( vxui_menu_cfg ) {
-                    .style = &menu_style,
+                    .style = &command_menu_style,
                     .viewport_height = viewport_height,
                 } );
                 vxui_menu_action( ctx, &app->main_menu_state, "sortie", "menu.sortie", vxui_demo_open_sortie, ( vxui_menu_row_cfg ) {
@@ -4671,9 +4774,9 @@ static void vxui_demo_render_sortie_screen( vxui_demo_app* app, vxui_ctx* ctx )
             .back_fn = vxui_demo_open_main_menu,
             .back_cfg = ( vxui_action_cfg ) { .userdata = app },
             .status = {
-                vxui_demo_locale_name_key( app ? app->locale_index : 0 ),
-                vxui_demo_prompt_name_key( app ? app->prompt_table_index : 0 ),
-                vxui_demo_screen_name_key( vxui_demo_top_screen_name( ctx ) ),
+                vxui_demo_footer_locale_key( app ? app->locale_index : 0 ),
+                vxui_demo_footer_prompt_key( app ? app->prompt_table_index : 0 ),
+                vxui_demo_footer_top_name( app, ctx ),
                 ctx ? ctx->screen_count : 0,
             },
         } );
@@ -4694,9 +4797,9 @@ static void vxui_demo_render_loadout_screen( vxui_demo_app* app, vxui_ctx* ctx )
             .back_fn = vxui_demo_open_main_menu,
             .back_cfg = ( vxui_action_cfg ) { .userdata = app },
             .status = {
-                vxui_demo_locale_name_key( app ? app->locale_index : 0 ),
-                vxui_demo_prompt_name_key( app ? app->prompt_table_index : 0 ),
-                vxui_demo_screen_name_key( vxui_demo_top_screen_name( ctx ) ),
+                vxui_demo_footer_locale_key( app ? app->locale_index : 0 ),
+                vxui_demo_footer_prompt_key( app ? app->prompt_table_index : 0 ),
+                vxui_demo_footer_top_name( app, ctx ),
                 ctx ? ctx->screen_count : 0,
             },
         } );
@@ -4715,9 +4818,9 @@ static void vxui_demo_render_archives_screen( vxui_demo_app* app, vxui_ctx* ctx 
             .back_fn = vxui_demo_open_main_menu,
             .back_cfg = ( vxui_action_cfg ) { .userdata = app },
             .status = {
-                vxui_demo_locale_name_key( app ? app->locale_index : 0 ),
-                vxui_demo_prompt_name_key( app ? app->prompt_table_index : 0 ),
-                vxui_demo_screen_name_key( vxui_demo_top_screen_name( ctx ) ),
+                vxui_demo_footer_locale_key( app ? app->locale_index : 0 ),
+                vxui_demo_footer_prompt_key( app ? app->prompt_table_index : 0 ),
+                vxui_demo_footer_top_name( app, ctx ),
                 ctx ? ctx->screen_count : 0,
             },
         } );
@@ -4725,10 +4828,9 @@ static void vxui_demo_render_archives_screen( vxui_demo_app* app, vxui_ctx* ctx 
 
 static void vxui_demo_render_settings_screen( vxui_demo_app* app, vxui_ctx* ctx, const vxui_demo_renderer* renderer )
 {
-    const vxui_demo_command_deck_theme& theme = vxui_demo_command_deck_theme_tokens();
     const bool rtl = ctx->rtl;
     const bool background_scanline = app ? app->scanline_index != 0 : true;
-    const float control_height = vxui_demo_control_height( renderer, ctx->locale );
+    ( void ) renderer;
     const float viewport_width = std::max( 0.0f, ( float ) ctx->cfg.screen_width - VXUI_DEMO_LAYOUT_OUTER_PADDING * 2.0f );
     const float surface_max_height = std::max( 0.0f, ( float ) ctx->cfg.screen_height - VXUI_DEMO_LAYOUT_OUTER_PADDING * 2.0f );
     const float layout_surface_max_height =
@@ -4747,42 +4849,54 @@ static void vxui_demo_render_settings_screen( vxui_demo_app* app, vxui_ctx* ctx,
     form_style.section_gap = 8.0f;
     form_style.padding_x = 12.0f;
     form_style.padding_y = 8.0f;
+    form_style.lane_gap = 12.0f;
+    const float settings_viewport_height = std::max( layout.menu_viewport_height, layout.surface_max_height - 220.0f );
+    vxui_menu_style body_menu_style = form_style;
+    body_menu_style.panel_fill_color = { 0, 0, 0, 1 };
 
     vxui_demo_emit_screen_surface( ctx, "settings", "settings.surface", surface_metrics.surface_width, layout.surface_max_height, rtl, background_scanline, [&]() {
-        VXUI( ctx, "settings.header", {
-            .layout = {
-                .sizing = { CLAY_SIZING_GROW( 0 ), CLAY_SIZING_FIT( 0 ) },
-                .padding = CLAY_PADDING_ALL( 12 ),
-                .childGap = 6,
-                .layoutDirection = CLAY_TOP_TO_BOTTOM,
-            },
-            .backgroundColor = vxui_demo_clay_color( theme.hero_surface_fill ),
-            .cornerRadius = CLAY_CORNER_RADIUS( 14 ),
-            .border = vxui_demo_panel_border( theme.hero_surface_border, 1 ),
-        } ) {
-            VXUI_LABEL( ctx, "menu.settings", ( vxui_label_cfg ) {
-                .font_id = VXUI_DEMO_FONT_ROLE_TITLE,
-                .font_size = 40.0f,
-                .color = theme.title_text,
-            } );
-            VXUI_LABEL( ctx, "Carry-forward shell controls and layout-safe menu scrolling.", ( vxui_label_cfg ) {
-                .font_id = VXUI_DEMO_FONT_ROLE_BODY,
-                .font_size = 16.0f,
-                .color = theme.accent_cool,
-            } );
-        }
-
-        VXUI( ctx, "settings.body_panel", {
-            .layout = {
-                .sizing = { CLAY_SIZING_GROW( 0 ), CLAY_SIZING_GROW( 180.0f ) },
-            },
-            .backgroundColor = vxui_demo_clay_color( theme.primary_panel_fill ),
-            .cornerRadius = CLAY_CORNER_RADIUS( 12 ),
-            .border = vxui_demo_panel_border( theme.primary_panel_border, 1 ),
-        } ) {
+        const std::string settings_screen_count = std::to_string( ctx ? ctx->screen_count : 0 );
+        vxui_menu_prompt_item footer_prompts[] = {
+            { "action.confirm", "menu.confirm", false, "settings.prompt.confirm" },
+            { "action.cancel", "menu.cancel", false, "settings.prompt.cancel" },
+        };
+        vxui_menu_status_item footer_status[] = {
+            { "status.short.locale", vxui_demo_footer_locale_key( app ? app->locale_index : 0 ), VXUI_MENU_STATUS_PRIMARY, false, false, "settings.footer.status.locale" },
+            { "status.short.prompts", vxui_demo_footer_prompt_key( app ? app->prompt_table_index : 0 ), VXUI_MENU_STATUS_SECONDARY, true, false, "settings.footer.status.prompts" },
+            { "status.short.screens", settings_screen_count.c_str(), VXUI_MENU_STATUS_SECONDARY, true, false, "settings.footer.status.screens" },
+            { "status.short.top", vxui_demo_footer_top_name( app, ctx ), VXUI_MENU_STATUS_PRIMARY, false, false, "settings.footer.status.top" },
+        };
+        vxui_menu_footer_cfg footer_cfg = {
+            footer_prompts,
+            ( int ) ( sizeof( footer_prompts ) / sizeof( footer_prompts[ 0 ] ) ),
+            footer_status,
+            ( int ) ( sizeof( footer_status ) / sizeof( footer_status[ 0 ] ) ),
+            VXUI_MENU_SHELL_COMPACT_AUTO,
+            layout.surface_max_height <= 680.0f ? 3 : 4,
+            false,
+        };
+        vxui_menu_screen_cfg screen_cfg = {
+            VXUI_MENU_SHELL_FORM,
+            &form_style,
+            VXUI_MENU_SHELL_COMPACT_AUTO,
+            680.0f,
+            0.0f,
+            false,
+            { "menu.settings", "Carry-forward shell controls and layout-safe menu scrolling.", false },
+            { 0.0f, surface_metrics.content_width, true, false, false },
+            { 0.0f, 0.0f, false, false, true },
+            { 0.0f, 0.0f, false, true, true },
+            {},
+            footer_cfg,
+        };
+        vxui_menu_state shell_state = {};
+        vxui_menu_screen_begin( ctx, &shell_state, "settings.shell", &screen_cfg );
+        vxui_menu_header( ctx, "settings.header", &screen_cfg.header );
+        vxui_menu_primary_lane_begin( ctx, "settings.body_panel", &screen_cfg.primary_lane );
+        
             vxui_menu_begin( ctx, &app->settings_menu_state, "settings.body_menu", ( vxui_menu_cfg ) {
-                .style = &form_style,
-                .viewport_height = layout.menu_viewport_height,
+                .style = &body_menu_style,
+                .viewport_height = settings_viewport_height,
             } );
             vxui_menu_section( ctx, &app->settings_menu_state, "interface", "menu.interface", ( vxui_menu_section_cfg ) { 0 } );
             vxui_menu_option( ctx, &app->settings_menu_state, "challenge", "menu.challenge", &app->difficulty, const_cast< const char** >( VXUI_DEMO_DIFFICULTY_KEYS ), 3, ( vxui_menu_row_cfg ) {
@@ -4808,36 +4922,19 @@ static void vxui_demo_render_settings_screen( vxui_demo_app* app, vxui_ctx* ctx,
                 .on_change = vxui_demo_locale_option_changed,
                 .userdata = app,
             } );
+            vxui_menu_section( ctx, &app->settings_menu_state, "actions", "menu.confirm", ( vxui_menu_section_cfg ) {
+                .secondary_key = "Quick actions",
+            } );
+            vxui_menu_action( ctx, &app->settings_menu_state, "defaults", "menu.restore_defaults", vxui_demo_restore_defaults_action, ( vxui_menu_row_cfg ) { 0 }, ( vxui_action_cfg ) {
+                .userdata = app,
+            } );
+            vxui_menu_action( ctx, &app->settings_menu_state, "back", "menu.return_command_deck", vxui_demo_close_settings, ( vxui_menu_row_cfg ) { 0 }, ( vxui_action_cfg ) {
+                .userdata = app,
+            } );
             vxui_menu_end( ctx, &app->settings_menu_state );
-        }
-
-        VXUI( ctx, "settings.footer", {
-            .layout = {
-                .sizing = { CLAY_SIZING_GROW( 0 ), CLAY_SIZING_FIT( 0 ) },
-                .padding = CLAY_PADDING_ALL( 8 ),
-                .childGap = 6,
-                .childAlignment = { .y = CLAY_ALIGN_Y_CENTER },
-                .layoutDirection = vxui__resolve_dir( CLAY_LEFT_TO_RIGHT, rtl ),
-            },
-            .backgroundColor = vxui_demo_clay_color( theme.utility_fill ),
-            .cornerRadius = CLAY_CORNER_RADIUS( 12 ),
-            .border = vxui_demo_panel_border( theme.utility_border, 1 ),
-        } ) {
-            vxui_demo_emit_footer_action_bar( ctx, "settings.footer.actions", rtl, [&]() {
-                vxui_demo_emit_action_button( ctx, "settings.back", "menu.return_command_deck", vxui_demo_close_settings, ( vxui_action_cfg ) {
-                    .userdata = app,
-                }, control_height );
-                vxui_demo_emit_action_button( ctx, "settings.defaults", "menu.restore_defaults", vxui_demo_restore_defaults_action, ( vxui_action_cfg ) {
-                    .userdata = app,
-                }, control_height );
-            } );
-            vxui_demo_emit_footer_action_bar( ctx, "settings.footer.prompts", rtl, [&]() {
-                const vxui_label_cfg prompt_cfg = vxui_demo_text_style( VXUI_DEMO_FONT_ROLE_BODY, 15.0f, theme.utility_text );
-                vxui_demo_emit_prompt_pair( ctx, "settings.prompt.confirm", "action.confirm", "menu.confirm", &prompt_cfg );
-                vxui_demo_emit_prompt_pair( ctx, "settings.prompt.cancel", "action.cancel", "menu.cancel", &prompt_cfg );
-            } );
-            vxui_demo_emit_status_panel( ctx, "settings.footer.status", app, rtl );
-        }
+        vxui_menu_primary_lane_end( ctx );
+        vxui_menu_footer( ctx, "settings.footer", &footer_cfg );
+        vxui_menu_screen_end( ctx, &shell_state );
     } );
 }
 
@@ -4854,9 +4951,9 @@ static void vxui_demo_render_records_screen( vxui_demo_app* app, vxui_ctx* ctx )
             .back_fn = vxui_demo_open_main_menu,
             .back_cfg = ( vxui_action_cfg ) { .userdata = app },
             .status = {
-                vxui_demo_locale_name_key( app ? app->locale_index : 0 ),
-                vxui_demo_prompt_name_key( app ? app->prompt_table_index : 0 ),
-                vxui_demo_screen_name_key( vxui_demo_top_screen_name( ctx ) ),
+                vxui_demo_footer_locale_key( app ? app->locale_index : 0 ),
+                vxui_demo_footer_prompt_key( app ? app->prompt_table_index : 0 ),
+                vxui_demo_footer_top_name( app, ctx ),
                 ctx ? ctx->screen_count : 0,
             },
         } );

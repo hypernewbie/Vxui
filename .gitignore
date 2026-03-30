@@ -24,3 +24,6 @@ temp/
 tmp/
 .claude/
 TEMP*.md
+GEMINI.md
+AGENTS.md
+CLAUDE.md

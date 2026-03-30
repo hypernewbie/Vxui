@@ -35,6 +35,27 @@ typedef enum vxui_menu_focus_decor
     VXUI_MENU_FOCUS_DECOR_PULSE = 2,
 } vxui_menu_focus_decor;
 
+typedef enum vxui_menu_shell_kind
+{
+    VXUI_MENU_SHELL_TITLE_MENU = 0,
+    VXUI_MENU_SHELL_SPLIT_DECK = 1,
+    VXUI_MENU_SHELL_FORM = 2,
+} vxui_menu_shell_kind;
+
+typedef enum vxui_menu_shell_compact_mode
+{
+    VXUI_MENU_SHELL_COMPACT_AUTO = 0,
+    VXUI_MENU_SHELL_COMPACT_FORCE_OFF = 1,
+    VXUI_MENU_SHELL_COMPACT_FORCE_ON = 2,
+} vxui_menu_shell_compact_mode;
+
+typedef enum vxui_menu_status_importance
+{
+    VXUI_MENU_STATUS_PRIMARY = 0,
+    VXUI_MENU_STATUS_SECONDARY = 1,
+    VXUI_MENU_STATUS_OPTIONAL = 2,
+} vxui_menu_status_importance;
+
 typedef struct vxui_menu_state
 {
     float scroll_current;
@@ -90,6 +111,76 @@ typedef struct vxui_menu_prompt_bar_cfg
     float gap;
     bool hidden;
 } vxui_menu_prompt_bar_cfg;
+
+typedef struct vxui_menu_header_cfg
+{
+    const char* title_key;
+    const char* subtitle_key;
+    bool hidden;
+} vxui_menu_header_cfg;
+
+typedef struct vxui_menu_help_cfg
+{
+    const char* title_key;
+    const char* const* line_keys;
+    int line_count;
+    int compact_line_count;
+    bool hidden;
+} vxui_menu_help_cfg;
+
+typedef struct vxui_menu_preview_cfg
+{
+    const char* section_key;
+    const char* title_key;
+    const char* subtitle_key;
+    const char* badge_text_key;
+    const char* body_key;
+    const char* compact_body_key;
+    int body_max_lines;
+    int compact_body_max_lines;
+    const vxui_menu_help_cfg* help;
+    bool hidden;
+    const char* header_id;
+    const char* body_id;
+} vxui_menu_preview_cfg;
+
+typedef struct vxui_menu_prompt_item
+{
+    const char* action_name;
+    const char* label_key;
+    bool hidden;
+    const char* id;
+} vxui_menu_prompt_item;
+
+typedef struct vxui_menu_status_item
+{
+    const char* label_key;
+    const char* value_key;
+    vxui_menu_status_importance importance;
+    bool collapse_in_compact;
+    bool hidden;
+    const char* id;
+} vxui_menu_status_item;
+
+typedef struct vxui_menu_footer_cfg
+{
+    const vxui_menu_prompt_item* prompt_items;
+    int prompt_item_count;
+    const vxui_menu_status_item* status_items;
+    int status_item_count;
+    vxui_menu_shell_compact_mode compact_mode;
+    int compact_max_status_items;
+    bool hidden;
+} vxui_menu_footer_cfg;
+
+typedef struct vxui_menu_lane_cfg
+{
+    float width;
+    float min_width;
+    bool grow;
+    bool weak;
+    bool hidden;
+} vxui_menu_lane_cfg;
 
 typedef struct vxui_menu_style
 {
@@ -151,10 +242,30 @@ typedef struct vxui_menu_cfg
     float viewport_height;
 } vxui_menu_cfg;
 
+typedef struct vxui_menu_screen_cfg
+{
+    vxui_menu_shell_kind shell_kind;
+    const vxui_menu_style* style;
+    vxui_menu_shell_compact_mode compact_mode;
+    float compact_height_threshold;
+    float compact_width_threshold;
+    bool tertiary_enabled;
+    vxui_menu_header_cfg header;
+    vxui_menu_lane_cfg primary_lane;
+    vxui_menu_lane_cfg secondary_lane;
+    vxui_menu_lane_cfg tertiary_lane;
+    vxui_menu_preview_cfg preview;
+    vxui_menu_footer_cfg footer;
+} vxui_menu_screen_cfg;
+
 vxui_menu_style vxui_menu_style_br_title( void );
 vxui_menu_style vxui_menu_style_br_panel( void );
 vxui_menu_style vxui_menu_style_form( void );
 vxui_menu_style vxui_menu_style_compact( void );
+vxui_menu_style vxui_menu_style_title_menu( void );
+vxui_menu_style vxui_menu_style_split_deck( void );
+vxui_menu_style vxui_menu_style_form_shell( void );
+vxui_menu_style vxui_menu_style_footer_strip( void );
 
 void vxui_menu_begin( vxui_ctx* ctx, vxui_menu_state* state, const char* id, vxui_menu_cfg cfg );
 void vxui_menu_end( vxui_ctx* ctx, vxui_menu_state* state );
@@ -165,6 +276,18 @@ void vxui_menu_option( vxui_ctx* ctx, vxui_menu_state* state, const char* id, co
 void vxui_menu_slider( vxui_ctx* ctx, vxui_menu_state* state, const char* id, const char* label_key, float* value, float min_value, float max_value, vxui_menu_row_cfg row_cfg, vxui_slider_cfg slider_cfg );
 void vxui_menu_badge( vxui_ctx* ctx, vxui_menu_state* state, const char* id, const char* text_key, vxui_menu_badge_cfg cfg );
 void vxui_menu_prompt_bar( vxui_ctx* ctx, vxui_menu_state* state, const char* id, const vxui_menu_prompt_bar_cfg* cfg );
+void vxui_menu_screen_begin( vxui_ctx* ctx, vxui_menu_state* state, const char* id, const vxui_menu_screen_cfg* cfg );
+void vxui_menu_screen_end( vxui_ctx* ctx, vxui_menu_state* state );
+void vxui_menu_header( vxui_ctx* ctx, const char* id, const vxui_menu_header_cfg* cfg );
+void vxui_menu_primary_lane_begin( vxui_ctx* ctx, const char* id, const vxui_menu_lane_cfg* cfg );
+void vxui_menu_primary_lane_end( vxui_ctx* ctx );
+void vxui_menu_secondary_lane_begin( vxui_ctx* ctx, const char* id, const vxui_menu_lane_cfg* cfg );
+void vxui_menu_secondary_lane_end( vxui_ctx* ctx );
+void vxui_menu_tertiary_lane_begin( vxui_ctx* ctx, const char* id, const vxui_menu_lane_cfg* cfg );
+void vxui_menu_tertiary_lane_end( vxui_ctx* ctx );
+void vxui_menu_preview( vxui_ctx* ctx, const char* id, const vxui_menu_preview_cfg* cfg );
+void vxui_menu_help_legend( vxui_ctx* ctx, const char* id, const vxui_menu_help_cfg* cfg );
+void vxui_menu_footer( vxui_ctx* ctx, const char* id, const vxui_menu_footer_cfg* cfg );
 
 #ifdef VXUI_MENU_IMPL
 
@@ -179,6 +302,8 @@ void vxui_menu_prompt_bar( vxui_ctx* ctx, vxui_menu_state* state, const char* id
 enum
 {
     VXUI_MENU__MAX_SCOPE_DEPTH = 8,
+    VXUI_MENU__MAX_SCREEN_SCOPE_DEPTH = 4,
+    VXUI_MENU__MAX_FOOTER_STATUS_ITEMS = 16,
 };
 
 typedef struct vxui_menu__scope
@@ -195,8 +320,31 @@ typedef struct vxui_menu__scope
     int focused_row_index;
 } vxui_menu__scope;
 
+typedef enum vxui_menu__lane_role
+{
+    VXUI_MENU__LANE_ROLE_NONE = 0,
+    VXUI_MENU__LANE_ROLE_PRIMARY = 1,
+    VXUI_MENU__LANE_ROLE_SECONDARY = 2,
+    VXUI_MENU__LANE_ROLE_TERTIARY = 3,
+} vxui_menu__lane_role;
+
+typedef struct vxui_menu__screen_scope
+{
+    vxui_ctx* ctx;
+    vxui_menu_state* state;
+    const char* id;
+    vxui_menu_style style;
+    vxui_menu_screen_cfg cfg;
+    bool compact;
+    bool body_open;
+    bool lane_open;
+    vxui_menu__lane_role active_lane;
+} vxui_menu__screen_scope;
+
 static thread_local vxui_menu__scope vxui_menu__scopes[ VXUI_MENU__MAX_SCOPE_DEPTH ];
 static thread_local int vxui_menu__scope_count = 0;
+static thread_local vxui_menu__screen_scope vxui_menu__screen_scopes[ VXUI_MENU__MAX_SCREEN_SCOPE_DEPTH ];
+static thread_local int vxui_menu__screen_scope_count = 0;
 
 static Clay_Color vxui_menu__to_clay_color( vxui_color color )
 {
@@ -229,6 +377,50 @@ static vxui_menu__scope* vxui_menu__current_scope( void )
         return nullptr;
     }
     return &vxui_menu__scopes[ vxui_menu__scope_count - 1 ];
+}
+
+static vxui_menu__screen_scope* vxui_menu__current_screen_scope( void )
+{
+    if ( vxui_menu__screen_scope_count <= 0 ) {
+        return nullptr;
+    }
+    return &vxui_menu__screen_scopes[ vxui_menu__screen_scope_count - 1 ];
+}
+
+static const char* vxui_menu__push_child_id( vxui_ctx* ctx, const char* base, const char* suffix )
+{
+    if ( !ctx ) {
+        return "";
+    }
+
+    char buffer[ 256 ] = {};
+    int wrote = std::snprintf( buffer, sizeof( buffer ), "%s.%s", base ? base : "", suffix ? suffix : "" );
+    if ( wrote < 0 ) {
+        return vxui__push_frame_string( ctx, "", 0 );
+    }
+    size_t length = ( size_t ) wrote;
+    if ( length >= sizeof( buffer ) ) {
+        length = sizeof( buffer ) - 1u;
+    }
+    return vxui__push_frame_string( ctx, buffer, length );
+}
+
+static const char* vxui_menu__push_child_index_id( vxui_ctx* ctx, const char* base, const char* suffix, int index )
+{
+    if ( !ctx ) {
+        return "";
+    }
+
+    char buffer[ 256 ] = {};
+    int wrote = std::snprintf( buffer, sizeof( buffer ), "%s.%s.%d", base ? base : "", suffix ? suffix : "", index );
+    if ( wrote < 0 ) {
+        return vxui__push_frame_string( ctx, "", 0 );
+    }
+    size_t length = ( size_t ) wrote;
+    if ( length >= sizeof( buffer ) ) {
+        length = sizeof( buffer ) - 1u;
+    }
+    return vxui__push_frame_string( ctx, buffer, length );
 }
 
 static vxui_menu_style vxui_menu__sanitize_style( vxui_menu_style style )
@@ -325,6 +517,207 @@ static vxui_menu_style vxui_menu__sanitize_style( vxui_menu_style style )
     if ( style.slider_fill_color.a == 0 ) style.slider_fill_color = defaults.slider_fill_color;
 
     return style;
+}
+
+static vxui_color vxui_menu__scale_alpha( vxui_color color, float scale )
+{
+    int alpha = ( int ) std::lround( ( double ) color.a * ( double ) scale );
+    if ( alpha < 0 ) {
+        alpha = 0;
+    }
+    if ( alpha > 255 ) {
+        alpha = 255;
+    }
+    color.a = ( uint8_t ) alpha;
+    return color;
+}
+
+static vxui_menu_style vxui_menu__default_screen_style( vxui_menu_shell_kind kind )
+{
+    switch ( kind ) {
+        case VXUI_MENU_SHELL_TITLE_MENU:
+            return vxui_menu_style_title_menu();
+
+        case VXUI_MENU_SHELL_SPLIT_DECK:
+            return vxui_menu_style_split_deck();
+
+        case VXUI_MENU_SHELL_FORM:
+        default:
+            return vxui_menu_style_form_shell();
+    }
+}
+
+static float vxui_menu__default_compact_height_threshold( vxui_menu_shell_kind kind )
+{
+    switch ( kind ) {
+        case VXUI_MENU_SHELL_TITLE_MENU:
+            return 668.0f;
+
+        case VXUI_MENU_SHELL_SPLIT_DECK:
+            return 680.0f;
+
+        case VXUI_MENU_SHELL_FORM:
+        default:
+            return 700.0f;
+    }
+}
+
+static float vxui_menu__default_compact_width_threshold( vxui_menu_shell_kind kind )
+{
+    switch ( kind ) {
+        case VXUI_MENU_SHELL_SPLIT_DECK:
+            return 1140.0f;
+
+        case VXUI_MENU_SHELL_TITLE_MENU:
+            return 1120.0f;
+
+        case VXUI_MENU_SHELL_FORM:
+        default:
+            return 0.0f;
+    }
+}
+
+static bool vxui_menu__resolve_screen_compact( vxui_ctx* ctx, const vxui_menu_screen_cfg* cfg )
+{
+    if ( !ctx ) {
+        return false;
+    }
+
+    vxui_menu_shell_kind kind = cfg ? cfg->shell_kind : VXUI_MENU_SHELL_FORM;
+    vxui_menu_shell_compact_mode mode = cfg ? cfg->compact_mode : VXUI_MENU_SHELL_COMPACT_AUTO;
+    if ( mode == VXUI_MENU_SHELL_COMPACT_FORCE_ON ) {
+        return true;
+    }
+    if ( mode == VXUI_MENU_SHELL_COMPACT_FORCE_OFF ) {
+        return false;
+    }
+
+    float height_threshold = cfg && cfg->compact_height_threshold > 0.0f
+        ? cfg->compact_height_threshold
+        : vxui_menu__default_compact_height_threshold( kind );
+    float width_threshold = cfg && cfg->compact_width_threshold > 0.0f
+        ? cfg->compact_width_threshold
+        : vxui_menu__default_compact_width_threshold( kind );
+    bool height_compact = height_threshold > 0.0f && ctx->cfg.screen_height <= ( int ) std::lround( ( double ) height_threshold );
+    bool width_compact = width_threshold > 0.0f && ctx->cfg.screen_width <= ( int ) std::lround( ( double ) width_threshold );
+    return height_compact || width_compact;
+}
+
+static vxui_menu_lane_cfg vxui_menu__default_lane_cfg( vxui_menu_shell_kind kind, vxui_menu__lane_role role, bool compact )
+{
+    switch ( kind ) {
+        case VXUI_MENU_SHELL_TITLE_MENU:
+            switch ( role ) {
+                case VXUI_MENU__LANE_ROLE_PRIMARY:
+                    return ( vxui_menu_lane_cfg ) { compact ? 320.0f : 360.0f, compact ? 280.0f : 320.0f, false, false, false };
+
+                case VXUI_MENU__LANE_ROLE_SECONDARY:
+                    return ( vxui_menu_lane_cfg ) { 0.0f, compact ? 0.0f : 420.0f, true, false, false };
+
+                case VXUI_MENU__LANE_ROLE_TERTIARY:
+                default:
+                    return ( vxui_menu_lane_cfg ) { 0.0f, 0.0f, false, true, true };
+            }
+
+        case VXUI_MENU_SHELL_SPLIT_DECK:
+            switch ( role ) {
+                case VXUI_MENU__LANE_ROLE_PRIMARY:
+                    return ( vxui_menu_lane_cfg ) { compact ? 300.0f : 332.0f, compact ? 280.0f : 300.0f, false, false, false };
+
+                case VXUI_MENU__LANE_ROLE_SECONDARY:
+                    return ( vxui_menu_lane_cfg ) { 0.0f, compact ? 360.0f : 420.0f, true, false, false };
+
+                case VXUI_MENU__LANE_ROLE_TERTIARY:
+                default:
+                    return ( vxui_menu_lane_cfg ) { compact ? 220.0f : 252.0f, compact ? 200.0f : 220.0f, false, true, false };
+            }
+
+        case VXUI_MENU_SHELL_FORM:
+        default:
+            return ( vxui_menu_lane_cfg ) { 0.0f, 0.0f, true, false, role != VXUI_MENU__LANE_ROLE_PRIMARY };
+    }
+}
+
+static vxui_menu_lane_cfg vxui_menu__resolve_lane_cfg( const vxui_menu__screen_scope* scope, vxui_menu__lane_role role, const vxui_menu_lane_cfg* override_cfg )
+{
+    vxui_menu_lane_cfg lane = vxui_menu__default_lane_cfg( scope ? scope->cfg.shell_kind : VXUI_MENU_SHELL_FORM, role, scope ? scope->compact : false );
+    if ( scope ) {
+        switch ( role ) {
+            case VXUI_MENU__LANE_ROLE_PRIMARY:
+                if ( scope->cfg.primary_lane.width > 0.0f ) lane.width = scope->cfg.primary_lane.width;
+                if ( scope->cfg.primary_lane.min_width > 0.0f ) lane.min_width = scope->cfg.primary_lane.min_width;
+                lane.grow = scope->cfg.primary_lane.grow || lane.grow;
+                lane.weak = scope->cfg.primary_lane.weak;
+                lane.hidden = scope->cfg.primary_lane.hidden;
+                break;
+
+            case VXUI_MENU__LANE_ROLE_SECONDARY:
+                if ( scope->cfg.secondary_lane.width > 0.0f ) lane.width = scope->cfg.secondary_lane.width;
+                if ( scope->cfg.secondary_lane.min_width > 0.0f ) lane.min_width = scope->cfg.secondary_lane.min_width;
+                lane.grow = scope->cfg.secondary_lane.grow || lane.grow;
+                lane.weak = scope->cfg.secondary_lane.weak;
+                lane.hidden = scope->cfg.secondary_lane.hidden;
+                break;
+
+            case VXUI_MENU__LANE_ROLE_TERTIARY:
+                if ( scope->cfg.tertiary_lane.width > 0.0f ) lane.width = scope->cfg.tertiary_lane.width;
+                if ( scope->cfg.tertiary_lane.min_width > 0.0f ) lane.min_width = scope->cfg.tertiary_lane.min_width;
+                lane.grow = scope->cfg.tertiary_lane.grow || lane.grow;
+                lane.weak = scope->cfg.tertiary_lane.weak || lane.weak;
+                lane.hidden = scope->cfg.tertiary_lane.hidden || !scope->cfg.tertiary_enabled;
+                break;
+
+            case VXUI_MENU__LANE_ROLE_NONE:
+            default:
+                break;
+        }
+    }
+
+    if ( override_cfg ) {
+        if ( override_cfg->width > 0.0f ) lane.width = override_cfg->width;
+        if ( override_cfg->min_width > 0.0f ) lane.min_width = override_cfg->min_width;
+        lane.grow = override_cfg->grow || lane.grow;
+        lane.weak = override_cfg->weak || lane.weak;
+        lane.hidden = override_cfg->hidden;
+    }
+
+    return lane;
+}
+
+static void vxui_menu__ensure_screen_body_open( vxui_menu__screen_scope* scope )
+{
+    if ( !scope || scope->body_open ) {
+        return;
+    }
+
+    vxui_ctx* ctx = scope->ctx;
+    float lane_gap = scope->compact ? scope->style.lane_gap * 0.75f : scope->style.lane_gap;
+    Clay__OpenElementWithId( vxui__clay_id_from_hash( vxui_id( vxui_menu__push_child_id( ctx, scope->id, "body" ) ) ) );
+    Clay__ConfigureOpenElement( ( Clay_ElementDeclaration ) {
+        .layout = {
+            .sizing = { CLAY_SIZING_GROW( 0 ), CLAY_SIZING_GROW( 0 ) },
+            .childGap = vxui_menu__u16( lane_gap ),
+            .childAlignment = { .y = CLAY_ALIGN_Y_TOP },
+            .layoutDirection = CLAY_LEFT_TO_RIGHT,
+        },
+    } );
+    scope->body_open = true;
+}
+
+static void vxui_menu__close_screen_body( vxui_menu__screen_scope* scope )
+{
+    if ( !scope ) {
+        return;
+    }
+    if ( scope->lane_open ) {
+        Clay__CloseElement();
+        scope->lane_open = false;
+        scope->active_lane = VXUI_MENU__LANE_ROLE_NONE;
+    }
+    if ( scope->body_open ) {
+        Clay__CloseElement();
+        scope->body_open = false;
+    }
 }
 
 static uint32_t vxui_menu__row_id( const vxui_menu__scope* scope, const char* id )
@@ -772,6 +1165,52 @@ vxui_menu_style vxui_menu_style_compact( void )
     style.body_font_size = 20.0f;
     style.secondary_font_size = 15.0f;
     style.badge_font_size = 14.0f;
+    return style;
+}
+
+vxui_menu_style vxui_menu_style_title_menu( void )
+{
+    vxui_menu_style style = vxui_menu_style_br_title();
+    style.row_gap = 10.0f;
+    style.section_gap = 18.0f;
+    style.padding_x = 16.0f;
+    style.padding_y = 10.0f;
+    style.panel_fill_color = { 14, 18, 28, 196 };
+    style.row_fill_color = { 20, 26, 38, 172 };
+    style.row_focus_fill_color = { 38, 54, 78, 228 };
+    return style;
+}
+
+vxui_menu_style vxui_menu_style_split_deck( void )
+{
+    vxui_menu_style style = vxui_menu_style_br_panel();
+    style.row_gap = 8.0f;
+    style.section_gap = 14.0f;
+    style.padding_x = 14.0f;
+    style.padding_y = 8.0f;
+    style.panel_fill_color = { 12, 18, 28, 208 };
+    return style;
+}
+
+vxui_menu_style vxui_menu_style_form_shell( void )
+{
+    vxui_menu_style style = vxui_menu_style_form();
+    style.section_gap = 14.0f;
+    style.panel_fill_color = { 10, 14, 22, 188 };
+    return style;
+}
+
+vxui_menu_style vxui_menu_style_footer_strip( void )
+{
+    vxui_menu_style style = vxui_menu_style_compact();
+    style.row_gap = 4.0f;
+    style.section_gap = 8.0f;
+    style.padding_x = 10.0f;
+    style.padding_y = 6.0f;
+    style.corner_radius = 10.0f;
+    style.panel_fill_color = { 12, 18, 28, 220 };
+    style.row_fill_color = { 0, 0, 0, 0 };
+    style.row_focus_fill_color = { 0, 0, 0, 0 };
     return style;
 }
 
@@ -1265,6 +1704,511 @@ void vxui_menu_prompt_bar( vxui_ctx* ctx, vxui_menu_state* state, const char* id
     Clay__CloseElement();
     vxui_menu__end_common_row();
     vxui_menu__track_row( scope, row_id );
+}
+
+void vxui_menu_screen_begin( vxui_ctx* ctx, vxui_menu_state* state, const char* id, const vxui_menu_screen_cfg* cfg )
+{
+    if ( !ctx || !state || !id || vxui_menu__screen_scope_count >= VXUI_MENU__MAX_SCREEN_SCOPE_DEPTH ) {
+        return;
+    }
+
+    vxui_menu_screen_cfg resolved = {};
+    if ( cfg ) {
+        resolved = *cfg;
+    }
+
+    vxui_menu_style style = cfg && cfg->style ? *cfg->style : vxui_menu__default_screen_style( resolved.shell_kind );
+    style = vxui_menu__sanitize_style( style );
+
+    vxui_menu__screen_scope* scope = &vxui_menu__screen_scopes[ vxui_menu__screen_scope_count++ ];
+    *scope = {};
+    scope->ctx = ctx;
+    scope->state = state;
+    scope->id = id;
+    scope->style = style;
+    scope->cfg = resolved;
+    scope->compact = vxui_menu__resolve_screen_compact( ctx, &resolved );
+
+    Clay__OpenElementWithId( vxui__clay_id_from_hash( vxui_id( id ) ) );
+    Clay__ConfigureOpenElement( ( Clay_ElementDeclaration ) {
+        .layout = {
+            .sizing = { CLAY_SIZING_GROW( 0 ), CLAY_SIZING_GROW( 0 ) },
+            .childGap = vxui_menu__u16( scope->compact ? style.section_gap * 0.75f : style.section_gap ),
+            .layoutDirection = CLAY_TOP_TO_BOTTOM,
+        },
+    } );
+}
+
+void vxui_menu_screen_end( vxui_ctx* ctx, vxui_menu_state* state )
+{
+    vxui_menu__screen_scope* scope = vxui_menu__current_screen_scope();
+    if ( !scope || scope->ctx != ctx || scope->state != state ) {
+        return;
+    }
+
+    vxui_menu__close_screen_body( scope );
+    Clay__CloseElement();
+    vxui_menu__screen_scope_count -= 1;
+}
+
+void vxui_menu_header( vxui_ctx* ctx, const char* id, const vxui_menu_header_cfg* cfg )
+{
+    vxui_menu__screen_scope* scope = vxui_menu__current_screen_scope();
+    if ( !scope || scope->ctx != ctx ) {
+        return;
+    }
+
+    const vxui_menu_header_cfg* header = cfg ? cfg : &scope->cfg.header;
+    if ( !header || header->hidden || ( !header->title_key && !header->subtitle_key ) ) {
+        return;
+    }
+
+    const char* root_id = id ? id : vxui_menu__push_child_id( ctx, scope->id, "header" );
+    float pad_x = scope->compact ? scope->style.padding_x : scope->style.padding_x * 1.25f;
+    float pad_y = scope->compact ? scope->style.padding_y : scope->style.padding_y * 1.25f;
+
+    Clay__OpenElementWithId( vxui__clay_id_from_hash( vxui_id( root_id ) ) );
+    Clay__ConfigureOpenElement( ( Clay_ElementDeclaration ) {
+        .layout = {
+            .sizing = { CLAY_SIZING_GROW( 0 ), CLAY_SIZING_FIT( 0 ) },
+            .padding = {
+                vxui_menu__u16( pad_x ),
+                vxui_menu__u16( pad_x ),
+                vxui_menu__u16( pad_y ),
+                vxui_menu__u16( pad_y ),
+            },
+            .childGap = vxui_menu__u16( scope->style.secondary_gap ),
+            .layoutDirection = CLAY_TOP_TO_BOTTOM,
+        },
+        .backgroundColor = vxui_menu__to_clay_color( vxui_menu__scale_alpha( scope->style.panel_fill_color, 0.85f ) ),
+        .cornerRadius = CLAY_CORNER_RADIUS( scope->style.corner_radius ),
+    } );
+
+    if ( header->title_key ) {
+        const char* title_id = vxui_menu__push_child_id( ctx, root_id, "title" );
+        vxui_menu__emit_text_leaf( ctx, vxui_id( title_id ), header->title_key, scope->style.title_font_id, scope->compact ? scope->style.title_font_size * 0.88f : scope->style.title_font_size, scope->style.section_text_color );
+    }
+    if ( header->subtitle_key ) {
+        const char* subtitle_id = vxui_menu__push_child_id( ctx, root_id, "subtitle" );
+        vxui_menu__emit_text_leaf( ctx, vxui_id( subtitle_id ), header->subtitle_key, scope->style.body_font_id, scope->style.secondary_font_size, scope->style.secondary_text_color );
+    }
+
+    Clay__CloseElement();
+}
+
+static void vxui_menu__lane_begin_impl( vxui_ctx* ctx, const char* id, const vxui_menu_lane_cfg* cfg, vxui_menu__lane_role role )
+{
+    vxui_menu__screen_scope* scope = vxui_menu__current_screen_scope();
+    if ( !scope || scope->ctx != ctx || scope->lane_open ) {
+        return;
+    }
+
+    vxui_menu_lane_cfg lane = vxui_menu__resolve_lane_cfg( scope, role, cfg );
+    if ( lane.hidden ) {
+        return;
+    }
+
+    vxui_menu__ensure_screen_body_open( scope );
+
+    Clay_SizingAxis width = lane.grow
+        ? CLAY_SIZING_GROW( 0 )
+        : ( lane.width > 0.0f ? CLAY_SIZING_FIXED( lane.width ) : ( lane.min_width > 0.0f ? CLAY_SIZING_FIXED( lane.min_width ) : CLAY_SIZING_FIT( 0 ) ) );
+    float pad_x = scope->compact ? scope->style.padding_x * 0.85f : scope->style.padding_x;
+    float pad_y = scope->compact ? scope->style.padding_y * 0.85f : scope->style.padding_y;
+    vxui_color fill_color = scope->style.panel_fill_color;
+    vxui_color border_color = scope->style.row_border_color;
+    if ( role == VXUI_MENU__LANE_ROLE_PRIMARY ) {
+        fill_color = vxui_menu__scale_alpha( scope->style.row_fill_color, 0.92f );
+    } else if ( role == VXUI_MENU__LANE_ROLE_SECONDARY ) {
+        fill_color = vxui_menu__scale_alpha( scope->style.panel_fill_color, 1.06f );
+        border_color = scope->style.row_focus_border_color;
+    } else if ( role == VXUI_MENU__LANE_ROLE_TERTIARY ) {
+        fill_color = vxui_menu__scale_alpha( scope->style.panel_fill_color, 0.7f );
+        border_color = vxui_menu__scale_alpha( scope->style.row_border_color, 0.65f );
+    }
+    const char* lane_id = id
+        ? id
+        : vxui_menu__push_child_id(
+              ctx,
+              scope->id,
+              role == VXUI_MENU__LANE_ROLE_PRIMARY ? "primary_lane" : ( role == VXUI_MENU__LANE_ROLE_SECONDARY ? "secondary_lane" : "tertiary_lane" ) );
+
+    Clay__OpenElementWithId( vxui__clay_id_from_hash( vxui_id( lane_id ) ) );
+    Clay__ConfigureOpenElement( ( Clay_ElementDeclaration ) {
+        .layout = {
+            .sizing = { width, CLAY_SIZING_GROW( 0 ) },
+            .padding = {
+                vxui_menu__u16( pad_x ),
+                vxui_menu__u16( pad_x ),
+                vxui_menu__u16( pad_y ),
+                vxui_menu__u16( pad_y ),
+            },
+            .childGap = vxui_menu__u16( scope->compact ? scope->style.row_gap * 0.75f : scope->style.row_gap ),
+            .layoutDirection = CLAY_TOP_TO_BOTTOM,
+        },
+        .backgroundColor = vxui_menu__to_clay_color( lane.weak ? vxui_menu__scale_alpha( fill_color, 0.8f ) : fill_color ),
+        .cornerRadius = CLAY_CORNER_RADIUS( scope->style.corner_radius ),
+        .border = {
+            .color = vxui_menu__to_clay_color( lane.weak ? vxui_menu__scale_alpha( border_color, 0.7f ) : border_color ),
+            .width = { 1, 1, 1, 1, 1 },
+        },
+    } );
+
+    scope->lane_open = true;
+    scope->active_lane = role;
+}
+
+static void vxui_menu__lane_end_impl( vxui_ctx* ctx )
+{
+    vxui_menu__screen_scope* scope = vxui_menu__current_screen_scope();
+    if ( !scope || scope->ctx != ctx || !scope->lane_open ) {
+        return;
+    }
+
+    Clay__CloseElement();
+    scope->lane_open = false;
+    scope->active_lane = VXUI_MENU__LANE_ROLE_NONE;
+}
+
+void vxui_menu_primary_lane_begin( vxui_ctx* ctx, const char* id, const vxui_menu_lane_cfg* cfg )
+{
+    vxui_menu__lane_begin_impl( ctx, id, cfg, VXUI_MENU__LANE_ROLE_PRIMARY );
+}
+
+void vxui_menu_primary_lane_end( vxui_ctx* ctx )
+{
+    vxui_menu__lane_end_impl( ctx );
+}
+
+void vxui_menu_secondary_lane_begin( vxui_ctx* ctx, const char* id, const vxui_menu_lane_cfg* cfg )
+{
+    vxui_menu__lane_begin_impl( ctx, id, cfg, VXUI_MENU__LANE_ROLE_SECONDARY );
+}
+
+void vxui_menu_secondary_lane_end( vxui_ctx* ctx )
+{
+    vxui_menu__lane_end_impl( ctx );
+}
+
+void vxui_menu_tertiary_lane_begin( vxui_ctx* ctx, const char* id, const vxui_menu_lane_cfg* cfg )
+{
+    vxui_menu__lane_begin_impl( ctx, id, cfg, VXUI_MENU__LANE_ROLE_TERTIARY );
+}
+
+void vxui_menu_tertiary_lane_end( vxui_ctx* ctx )
+{
+    vxui_menu__lane_end_impl( ctx );
+}
+
+void vxui_menu_help_legend( vxui_ctx* ctx, const char* id, const vxui_menu_help_cfg* cfg )
+{
+    vxui_menu__screen_scope* scope = vxui_menu__current_screen_scope();
+    if ( !scope || scope->ctx != ctx || !cfg || cfg->hidden ) {
+        return;
+    }
+
+    const char* root_id = id ? id : vxui_menu__push_child_id( ctx, scope->id, "help_legend" );
+    int line_count = cfg->line_count;
+    if ( scope->compact && cfg->compact_line_count > 0 && cfg->compact_line_count < line_count ) {
+        line_count = cfg->compact_line_count;
+    }
+
+    Clay__OpenElementWithId( vxui__clay_id_from_hash( vxui_id( root_id ) ) );
+    Clay__ConfigureOpenElement( ( Clay_ElementDeclaration ) {
+        .layout = {
+            .sizing = { CLAY_SIZING_GROW( 0 ), CLAY_SIZING_FIT( 0 ) },
+            .childGap = vxui_menu__u16( scope->compact ? scope->style.secondary_gap : scope->style.secondary_gap * 1.25f ),
+            .layoutDirection = CLAY_TOP_TO_BOTTOM,
+        },
+    } );
+
+    if ( cfg->title_key ) {
+        const char* title_id = vxui_menu__push_child_id( ctx, root_id, "title" );
+        Clay__OpenElementWithId( vxui__clay_id_from_hash( vxui_id( title_id ) ) );
+        Clay__ConfigureOpenElement( ( Clay_ElementDeclaration ) {
+            .layout = {
+                .sizing = { CLAY_SIZING_FIT( 0 ), CLAY_SIZING_FIT( 0 ) },
+            },
+        } );
+        vxui_menu__emit_text_leaf( ctx, vxui_id( vxui_menu__push_child_id( ctx, title_id, "text" ) ), cfg->title_key, scope->style.body_font_id, scope->style.secondary_font_size, scope->style.section_text_color );
+        Clay__CloseElement();
+    }
+
+    for ( int i = 0; i < line_count; ++i ) {
+        const char* line_key = cfg->line_keys ? cfg->line_keys[ i ] : nullptr;
+        if ( !line_key ) {
+            continue;
+        }
+        const char* line_id = vxui_menu__push_child_index_id( ctx, root_id, "line", i );
+        Clay__OpenElementWithId( vxui__clay_id_from_hash( vxui_id( line_id ) ) );
+        Clay__ConfigureOpenElement( ( Clay_ElementDeclaration ) {
+            .layout = {
+                .sizing = { CLAY_SIZING_FIT( 0 ), CLAY_SIZING_FIT( 0 ) },
+            },
+        } );
+        vxui_menu__emit_text_leaf( ctx, vxui_id( vxui_menu__push_child_id( ctx, line_id, "text" ) ), line_key, scope->style.body_font_id, scope->compact ? scope->style.secondary_font_size : scope->style.body_font_size * 0.78f, scope->style.secondary_text_color );
+        Clay__CloseElement();
+    }
+
+    Clay__CloseElement();
+}
+
+void vxui_menu_preview( vxui_ctx* ctx, const char* id, const vxui_menu_preview_cfg* cfg )
+{
+    vxui_menu__screen_scope* scope = vxui_menu__current_screen_scope();
+    if ( !scope || scope->ctx != ctx ) {
+        return;
+    }
+
+    const vxui_menu_preview_cfg* preview = cfg ? cfg : &scope->cfg.preview;
+    if ( !preview || preview->hidden ) {
+        return;
+    }
+
+    const char* root_id = id ? id : vxui_menu__push_child_id( ctx, scope->id, "preview" );
+    const char* body_key = scope->compact && preview->compact_body_key ? preview->compact_body_key : preview->body_key;
+
+    Clay__OpenElementWithId( vxui__clay_id_from_hash( vxui_id( root_id ) ) );
+    Clay__ConfigureOpenElement( ( Clay_ElementDeclaration ) {
+        .layout = {
+            .sizing = { CLAY_SIZING_GROW( 0 ), CLAY_SIZING_FIT( 0 ) },
+            .childGap = vxui_menu__u16( scope->compact ? scope->style.row_gap * 0.7f : scope->style.row_gap ),
+            .layoutDirection = CLAY_TOP_TO_BOTTOM,
+        },
+    } );
+
+    if ( preview->section_key ) {
+        const char* section_id = vxui_menu__push_child_id( ctx, root_id, "section" );
+        vxui_menu__emit_text_leaf( ctx, vxui_id( section_id ), preview->section_key, scope->style.body_font_id, scope->style.secondary_font_size, scope->style.section_text_color );
+    }
+
+    if ( preview->title_key || preview->badge_text_key ) {
+        const char* heading_id = preview->header_id ? preview->header_id : vxui_menu__push_child_id( ctx, root_id, "heading" );
+        Clay__OpenElementWithId( vxui__clay_id_from_hash( vxui_id( heading_id ) ) );
+        Clay__ConfigureOpenElement( ( Clay_ElementDeclaration ) {
+            .layout = {
+                .sizing = { CLAY_SIZING_GROW( 0 ), CLAY_SIZING_FIT( 0 ) },
+                .childGap = vxui_menu__u16( scope->style.prompt_gap ),
+                .childAlignment = { .y = CLAY_ALIGN_Y_CENTER },
+                .layoutDirection = CLAY_LEFT_TO_RIGHT,
+            },
+        } );
+        if ( preview->title_key ) {
+            const char* title_id = vxui_menu__push_child_id( ctx, root_id, "title" );
+            vxui_menu__emit_text_leaf( ctx, vxui_id( title_id ), preview->title_key, scope->style.title_font_id, scope->compact ? scope->style.title_font_size * 0.86f : scope->style.title_font_size, scope->style.text_color );
+        }
+        if ( preview->badge_text_key ) {
+            const char* badge_id = vxui_menu__push_child_id( ctx, root_id, "badge" );
+            vxui_menu__scope badge_scope = {};
+            badge_scope.ctx = ctx;
+            badge_scope.style = scope->style;
+            vxui_menu__emit_badge_inline( &badge_scope, vxui_id( badge_id ), preview->badge_text_key, nullptr );
+        }
+        Clay__CloseElement();
+    }
+
+    if ( preview->subtitle_key ) {
+        const char* subtitle_id = vxui_menu__push_child_id( ctx, root_id, "subtitle" );
+        vxui_menu__emit_text_leaf( ctx, vxui_id( subtitle_id ), preview->subtitle_key, scope->style.body_font_id, scope->style.secondary_font_size, scope->style.secondary_text_color );
+    }
+
+    if ( body_key ) {
+        const char* body_id = preview->body_id ? preview->body_id : vxui_menu__push_child_id( ctx, root_id, "body" );
+        Clay__OpenElementWithId( vxui__clay_id_from_hash( vxui_id( body_id ) ) );
+        Clay__ConfigureOpenElement( ( Clay_ElementDeclaration ) {
+            .layout = {
+                .sizing = { CLAY_SIZING_GROW( 0 ), CLAY_SIZING_FIT( 0 ) },
+                .layoutDirection = CLAY_TOP_TO_BOTTOM,
+            },
+        } );
+        vxui_menu__emit_text_leaf( ctx, vxui_id( vxui_menu__push_child_id( ctx, body_id, "text" ) ), body_key, scope->style.body_font_id, scope->compact ? scope->style.body_font_size * 0.82f : scope->style.body_font_size * 0.9f, scope->style.text_color );
+        Clay__CloseElement();
+    }
+
+    if ( preview->help && !preview->help->hidden ) {
+        const char* help_id = vxui_menu__push_child_id( ctx, root_id, "help_legend" );
+        vxui_menu_help_legend( ctx, help_id, preview->help );
+    }
+
+    Clay__CloseElement();
+}
+
+void vxui_menu_footer( vxui_ctx* ctx, const char* id, const vxui_menu_footer_cfg* cfg )
+{
+    vxui_menu__screen_scope* scope = vxui_menu__current_screen_scope();
+    if ( !scope || scope->ctx != ctx ) {
+        return;
+    }
+
+    const vxui_menu_footer_cfg* footer = cfg ? cfg : &scope->cfg.footer;
+    if ( !footer || footer->hidden ) {
+        return;
+    }
+
+    vxui_menu__close_screen_body( scope );
+
+    bool compact = scope->compact;
+    if ( footer->compact_mode == VXUI_MENU_SHELL_COMPACT_FORCE_ON ) {
+        compact = true;
+    } else if ( footer->compact_mode == VXUI_MENU_SHELL_COMPACT_FORCE_OFF ) {
+        compact = false;
+    }
+
+    int visible_prompt_count = 0;
+    for ( int i = 0; i < footer->prompt_item_count; ++i ) {
+        const vxui_menu_prompt_item* item = &footer->prompt_items[ i ];
+        if ( item->hidden || !item->action_name ) {
+            continue;
+        }
+        visible_prompt_count += 1;
+    }
+
+    bool use_status[ VXUI_MENU__MAX_FOOTER_STATUS_ITEMS ] = {};
+    int visible_status_count = 0;
+    int capped_status_count = footer->status_item_count;
+    if ( capped_status_count > VXUI_MENU__MAX_FOOTER_STATUS_ITEMS ) {
+        capped_status_count = VXUI_MENU__MAX_FOOTER_STATUS_ITEMS;
+    }
+    for ( int i = 0; i < capped_status_count; ++i ) {
+        const vxui_menu_status_item* item = &footer->status_items[ i ];
+        use_status[ i ] = !item->hidden && ( item->label_key || item->value_key );
+        visible_status_count += use_status[ i ] ? 1 : 0;
+    }
+
+    if ( compact ) {
+        int max_visible = footer->compact_max_status_items > 0 ? footer->compact_max_status_items : 2;
+        auto drop_matching = [&]( vxui_menu_status_importance importance, bool require_collapse_flag ) {
+            for ( int i = capped_status_count - 1; i >= 0 && visible_status_count > max_visible; --i ) {
+                const vxui_menu_status_item* item = &footer->status_items[ i ];
+                if ( !use_status[ i ] || item->importance != importance ) {
+                    continue;
+                }
+                if ( require_collapse_flag && !item->collapse_in_compact ) {
+                    continue;
+                }
+                use_status[ i ] = false;
+                visible_status_count -= 1;
+            }
+        };
+        drop_matching( VXUI_MENU_STATUS_OPTIONAL, false );
+        drop_matching( VXUI_MENU_STATUS_SECONDARY, true );
+        drop_matching( VXUI_MENU_STATUS_SECONDARY, false );
+        drop_matching( VXUI_MENU_STATUS_PRIMARY, true );
+    }
+
+    if ( visible_prompt_count <= 0 && visible_status_count <= 0 ) {
+        return;
+    }
+
+    const char* root_id = id ? id : vxui_menu__push_child_id( ctx, scope->id, "footer" );
+    float pad_x = compact ? scope->style.padding_x * 0.8f : scope->style.padding_x;
+    float pad_y = compact ? scope->style.padding_y * 0.75f : scope->style.padding_y;
+
+    Clay__OpenElementWithId( vxui__clay_id_from_hash( vxui_id( root_id ) ) );
+    Clay__ConfigureOpenElement( ( Clay_ElementDeclaration ) {
+        .layout = {
+            .sizing = { CLAY_SIZING_GROW( 0 ), CLAY_SIZING_FIT( 0 ) },
+            .padding = {
+                vxui_menu__u16( pad_x ),
+                vxui_menu__u16( pad_x ),
+                vxui_menu__u16( pad_y ),
+                vxui_menu__u16( pad_y ),
+            },
+            .childGap = vxui_menu__u16( compact ? scope->style.prompt_gap * 0.75f : scope->style.prompt_gap ),
+            .childAlignment = { .y = CLAY_ALIGN_Y_CENTER },
+            .layoutDirection = CLAY_LEFT_TO_RIGHT,
+        },
+        .backgroundColor = vxui_menu__to_clay_color( vxui_menu__scale_alpha( scope->style.panel_fill_color, 1.05f ) ),
+        .cornerRadius = CLAY_CORNER_RADIUS( scope->style.corner_radius ),
+    } );
+
+    if ( visible_prompt_count > 0 ) {
+        const char* prompts_id = vxui_menu__push_child_id( ctx, root_id, "prompts" );
+        Clay__OpenElementWithId( vxui__clay_id_from_hash( vxui_id( prompts_id ) ) );
+        Clay__ConfigureOpenElement( ( Clay_ElementDeclaration ) {
+            .layout = {
+                .sizing = { CLAY_SIZING_FIT( 0 ), CLAY_SIZING_FIT( 0 ) },
+                .childGap = vxui_menu__u16( compact ? scope->style.prompt_gap * 0.85f : scope->style.prompt_gap ),
+                .childAlignment = { .y = CLAY_ALIGN_Y_CENTER },
+                .layoutDirection = CLAY_LEFT_TO_RIGHT,
+            },
+        } );
+        for ( int i = 0; i < footer->prompt_item_count; ++i ) {
+            const vxui_menu_prompt_item* item = &footer->prompt_items[ i ];
+            if ( item->hidden || !item->action_name ) {
+                continue;
+            }
+            const char* prompt_id = item->id ? item->id : vxui_menu__push_child_index_id( ctx, prompts_id, "item", i );
+            Clay__OpenElementWithId( vxui__clay_id_from_hash( vxui_id( prompt_id ) ) );
+            Clay__ConfigureOpenElement( ( Clay_ElementDeclaration ) {
+                .layout = {
+                    .sizing = { CLAY_SIZING_FIT( 0 ), CLAY_SIZING_FIT( 0 ) },
+                    .childGap = vxui_menu__u16( compact ? scope->style.prompt_gap * 0.45f : scope->style.prompt_gap * 0.55f ),
+                    .childAlignment = { .y = CLAY_ALIGN_Y_CENTER },
+                    .layoutDirection = CLAY_LEFT_TO_RIGHT,
+                },
+            } );
+            VXUI_PROMPT( ctx, item->action_name );
+            if ( item->label_key ) {
+                const char* label_id = vxui_menu__push_child_id( ctx, prompt_id, "label" );
+                vxui_menu__emit_text_leaf( ctx, vxui_id( label_id ), item->label_key, scope->style.body_font_id, scope->style.secondary_font_size, scope->style.prompt_text_color );
+            }
+            Clay__CloseElement();
+        }
+        Clay__CloseElement();
+    }
+
+    if ( visible_prompt_count > 0 && visible_status_count > 0 ) {
+        const char* spacer_id = vxui_menu__push_child_id( ctx, root_id, "spacer" );
+        Clay__OpenElementWithId( vxui__clay_id_from_hash( vxui_id( spacer_id ) ) );
+        Clay__ConfigureOpenElement( ( Clay_ElementDeclaration ) {
+            .layout = {
+                .sizing = { CLAY_SIZING_GROW( 0 ), CLAY_SIZING_FIT( 0 ) },
+            },
+        } );
+        Clay__CloseElement();
+    }
+
+    if ( visible_status_count > 0 ) {
+        const char* status_id = vxui_menu__push_child_id( ctx, root_id, "status" );
+        Clay__OpenElementWithId( vxui__clay_id_from_hash( vxui_id( status_id ) ) );
+        Clay__ConfigureOpenElement( ( Clay_ElementDeclaration ) {
+            .layout = {
+                .sizing = { CLAY_SIZING_FIT( 0 ), CLAY_SIZING_FIT( 0 ) },
+                .childGap = vxui_menu__u16( compact ? scope->style.prompt_gap : scope->style.prompt_gap * 1.2f ),
+                .childAlignment = { .y = CLAY_ALIGN_Y_CENTER },
+                .layoutDirection = CLAY_LEFT_TO_RIGHT,
+            },
+        } );
+        for ( int i = 0; i < capped_status_count; ++i ) {
+            const vxui_menu_status_item* item = &footer->status_items[ i ];
+            if ( !use_status[ i ] ) {
+                continue;
+            }
+            const char* item_id = item->id ? item->id : vxui_menu__push_child_index_id( ctx, status_id, "item", i );
+            Clay__OpenElementWithId( vxui__clay_id_from_hash( vxui_id( item_id ) ) );
+            Clay__ConfigureOpenElement( ( Clay_ElementDeclaration ) {
+                .layout = {
+                    .sizing = { CLAY_SIZING_FIT( 0 ), CLAY_SIZING_FIT( 0 ) },
+                    .childGap = vxui_menu__u16( scope->style.secondary_gap ),
+                    .childAlignment = { .y = CLAY_ALIGN_Y_CENTER },
+                    .layoutDirection = CLAY_LEFT_TO_RIGHT,
+                },
+            } );
+            if ( item->label_key ) {
+                const char* label_id = vxui_menu__push_child_id( ctx, item_id, "label" );
+                vxui_menu__emit_text_leaf( ctx, vxui_id( label_id ), item->label_key, scope->style.body_font_id, scope->style.secondary_font_size, scope->style.secondary_text_color );
+            }
+            if ( item->value_key ) {
+                const char* value_id = vxui_menu__push_child_id( ctx, item_id, "value" );
+                vxui_menu__emit_text_leaf( ctx, vxui_id( value_id ), item->value_key, scope->style.body_font_id, scope->style.secondary_font_size, scope->style.text_color );
+            }
+            Clay__CloseElement();
+        }
+        Clay__CloseElement();
+    }
+
+    Clay__CloseElement();
 }
 
 #endif

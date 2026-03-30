@@ -141,6 +141,11 @@ struct vxui_demo_split_deck_layout_spec
     float menu_viewport_height;
 };
 
+inline bool vxui_demo_main_menu_preview_uses_compact_layout( const vxui_demo_main_menu_layout_spec& layout )
+{
+    return layout.surface_max_height <= 620.0f;
+}
+
 struct vxui_demo_settings_layout_spec
 {
     vxui_demo_surface_metrics surface;
@@ -380,15 +385,15 @@ inline vxui_demo_split_deck_contract vxui_demo_get_split_deck_contract( vxui_dem
         case VXUI_DEMO_SURFACE_SORTIE:
             return {
                 8.0f,
-                0.45f,
-                0.15f,
-                360.0f,
-                440.0f,
+                0.43f,
+                0.09f,
+                352.0f,
+                420.0f,
+                280.0f,
+                132.0f,
+                164.0f,
+                16.0f,
                 240.0f,
-                170.0f,
-                210.0f,
-                18.0f,
-                250.0f,
                 240.0f,
             };
 
@@ -458,8 +463,8 @@ inline vxui_demo_scroll_contract vxui_demo_get_scroll_contract( vxui_demo_surfac
         case VXUI_DEMO_SURFACE_MAIN_MENU:
             return {
                 "main.preview_panel",
-                "main.preview_body_viewport",
-                "main.preview_body_content",
+                "main.preview_body",
+                "main.preview_body",
             };
 
         case VXUI_DEMO_SURFACE_SETTINGS:
@@ -543,8 +548,12 @@ inline vxui_demo_main_menu_layout_spec vxui_demo_resolve_main_menu_layout(
         std::clamp( surface.content_width * command_fraction, command_min_width, command_max_width );
     const float preview_panel_width =
         std::max( preview_min_width, surface.content_width - command_panel_width - deck_gap );
-    const float footer_reserve = std::min( contract.footer_reserve, std::max( 164.0f, surface_max_height * 0.31f ) );
-    const float hero_reserve = surface_max_height <= 720.0f ? 76.0f : 92.0f;
+    const float footer_reserve_target = surface_max_height <= 620.0f
+        ? 250.0f
+        : surface_max_height <= 650.0f ? 244.0f
+        : std::max( 192.0f, surface_max_height * 0.35f );
+    const float footer_reserve = std::min( contract.footer_reserve, footer_reserve_target );
+    const float hero_reserve = surface_max_height <= 620.0f ? 68.0f : surface_max_height <= 720.0f ? 76.0f : 92.0f;
     const float usable_deck_height = std::max( 0.0f, surface_max_height - footer_reserve - hero_reserve );
     const float preview_panel_padding = tight_width ? 10.0f : contract.preview_panel_padding;
     const float preview_header_min_height =
@@ -553,7 +562,7 @@ inline vxui_demo_main_menu_layout_spec vxui_demo_resolve_main_menu_layout(
     const float preview_viewport_bottom_guard = tight_width ? 4.0f : contract.preview_viewport_bottom_guard;
     const float controls_owner_width = std::max( 0.0f, preview_panel_width - preview_panel_padding * 2.0f );
     const vxui_demo_controls_block_contract controls_contract =
-        vxui_demo_get_controls_block_contract( surface_max_height <= 720.0f ? 648.0f : surface_max_height, controls_owner_width );
+        vxui_demo_get_controls_block_contract( surface_max_height <= 620.0f ? 620.0f : surface_max_height, controls_owner_width );
     const float help_reserve = controls_contract.min_height > 0.0f ? controls_contract.min_height + VXUI_DEMO_LAYOUT_ROW_GAP : 0.0f;
     const float preview_body_viewport_height = std::max(
         contract.preview_viewport_min_height,
@@ -594,7 +603,11 @@ inline vxui_demo_split_deck_layout_spec vxui_demo_resolve_split_deck_layout(
     const float secondary_lane_width = std::max(
         contract.secondary_min_width,
         surface.content_width - primary_lane_width - tertiary_lane_width - contract.deck_gap * ( tertiary_lane_width > 0.0f ? 2.0f : 1.0f ) );
-    const float footer_reserve = std::min( contract.footer_reserve, std::max( 180.0f, surface_max_height * 0.35f ) );
+    const float footer_reserve_target = surface_max_height <= 650.0f
+        ? 236.0f
+        : surface_max_height <= 690.0f ? 216.0f
+        : std::max( 176.0f, surface_max_height * 0.31f );
+    const float footer_reserve = std::min( contract.footer_reserve, footer_reserve_target );
     const float usable_deck_height = std::max( 0.0f, surface_max_height - footer_reserve );
 
     return {

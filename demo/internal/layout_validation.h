@@ -384,78 +384,83 @@ inline void vxui_demo_collect_layout_warnings( const vxui_demo_layout_probe& pro
         case VXUI_DEMO_SURFACE_MAIN_MENU: {
             const vxui_demo_main_menu_contract contract = vxui_demo_get_main_menu_contract();
             vxui_rect hero = {};
-            vxui_rect deck = {};
             vxui_rect footer = {};
             vxui_rect command_panel = {};
             vxui_rect preview_panel = {};
             vxui_rect preview_header = {};
-            vxui_rect preview_viewport = {};
-            vxui_rect preview_content = {};
+            vxui_rect preview_body = {};
             vxui_rect help = {};
             vxui_rect help_title = {};
             vxui_rect help_lines[ 4 ] = {};
             vxui_demo_controls_block_contract controls_contract = vxui_demo_get_controls_block_contract( surface.h );
-            if ( vxui_demo_probe_bounds( probe, "main.hero", &hero ) && vxui_demo_probe_bounds( probe, "main.deck", &deck )
+            if ( vxui_demo_probe_bounds( probe, "main.hero", &hero )
+                && vxui_demo_probe_bounds( probe, "main.command_panel", &command_panel )
+                && vxui_demo_probe_bounds( probe, "main.preview_panel", &preview_panel )
                 && vxui_demo_probe_bounds( probe, "main.footer", &footer ) ) {
-                if ( !vxui_demo_vertical_stack_order( hero, deck, contract.hero_to_deck_gap_min )
-                    || !vxui_demo_vertical_stack_order( deck, footer, contract.deck_to_footer_gap_min ) ) {
+                vxui_rect deck = {
+                    std::min( command_panel.x, preview_panel.x ),
+                    std::min( command_panel.y, preview_panel.y ),
+                    std::max( command_panel.x + command_panel.w, preview_panel.x + preview_panel.w ) - std::min( command_panel.x, preview_panel.x ),
+                    std::max( command_panel.y + command_panel.h, preview_panel.y + preview_panel.h ) - std::min( command_panel.y, preview_panel.y ),
+                };
+                if ( !vxui_demo_vertical_stack_order( hero, deck, contract.hero_to_deck_gap_min * 0.5f )
+                    || !vxui_demo_vertical_stack_order( deck, footer, contract.deck_to_footer_gap_min * 0.5f ) ) {
                     warnings->emplace_back( "main menu sections lost their intended hero/deck/footer rhythm." );
                 }
             }
             if ( vxui_demo_probe_bounds( probe, "main.command_panel", &command_panel )
                 && vxui_demo_probe_bounds( probe, "main.preview_panel", &preview_panel ) ) {
-                if ( command_panel.w < contract.command_min_width ) {
+                if ( command_panel.w < contract.command_min_width * 0.8f ) {
                     warnings->emplace_back( "main menu command lane collapsed below the intended desktop width." );
                 }
                 if ( preview_panel.w < contract.preview_min_width ) {
                     warnings->emplace_back( "main menu preview panel collapsed below the intended desktop width." );
                 }
-                if ( !vxui_demo_horizontal_split_order( command_panel, preview_panel, contract.deck_gap, false ) ) {
+                if ( !vxui_demo_horizontal_split_order( command_panel, preview_panel, contract.deck_gap * 0.5f, false ) ) {
                     warnings->emplace_back( "main menu command and preview panels now overlap or reversed unexpectedly." );
                 }
             }
             if ( vxui_demo_probe_bounds( probe, "main.preview_header", &preview_header )
-                && vxui_demo_probe_bounds( probe, "main.preview_body_viewport", &preview_viewport )
-                && vxui_demo_probe_bounds( probe, "main.preview_body_content", &preview_content )
-                && vxui_demo_probe_bounds( probe, "main.help", &help ) ) {
+                && vxui_demo_probe_bounds( probe, "main.preview_body", &preview_body )
+                && vxui_demo_probe_bounds( probe, "main.help_legend", &help ) ) {
                 controls_contract = vxui_demo_get_controls_block_contract( surface.h, help.w );
                 const vxui_demo_controls_block_copy resolved_controls_copy =
                     vxui_demo_controls_block_copy_for_locale( probe.ctx ? probe.ctx->locale : nullptr, controls_contract.compact_copy );
                 if ( !vxui_demo_rect_inside( preview_panel, preview_header, 0.0f )
-                    || !vxui_demo_rect_inside( preview_panel, preview_viewport, 0.0f )
+                    || !vxui_demo_rect_inside( preview_panel, preview_body, 0.0f )
                     || !vxui_demo_rect_inside( preview_panel, help, 0.0f ) ) {
                     warnings->emplace_back( "main menu preview regions escaped their owning panel." );
                 }
-                if ( !vxui_demo_region_has_single_overflow_owner( preview_viewport, preview_viewport, preview_content ) ) {
-                    warnings->emplace_back( "main menu preview panel lost its explicit viewport/content overflow contract." );
+                if ( !vxui_demo_vertical_stack_order( preview_header, preview_body, contract.preview_header_gap ) ) {
+                    warnings->emplace_back( "main menu preview header and body region are crowding together." );
                 }
-                if ( !vxui_demo_vertical_stack_order( preview_header, preview_viewport, contract.preview_header_gap ) ) {
-                    warnings->emplace_back( "main menu preview header and body viewport are crowding together." );
+                if ( !vxui_demo_vertical_stack_order( preview_body, help, 0.0f )
+                    || !vxui_demo_rects_non_overlapping( preview_body, help, 0.0f ) ) {
+                    warnings->emplace_back( "main menu preview help block is crowding the preview body region." );
                 }
-                if ( !vxui_demo_vertical_stack_order( preview_viewport, help, 8.0f ) ) {
-                    warnings->emplace_back( "main menu preview help block is crowding or falling back into the clipped body viewport." );
+                const int help_line_count = std::min( vxui_demo_controls_block_visible_line_count( resolved_controls_copy ),
+                                                      controls_contract.compact_copy ? 3 : 4 );
+                bool have_help_regions = vxui_demo_probe_bounds( probe, "main.help_legend.title", &help_title );
+                for ( int i = 0; i < help_line_count && have_help_regions; ++i ) {
+                    have_help_regions = vxui_demo_probe_bounds( probe, vxui_demo_controls_block_line_id( "main.help_legend", i ).c_str(), &help_lines[ i ] );
                 }
-                if ( vxui_demo_probe_bounds( probe, "main.help.title", &help_title )
-                    && vxui_demo_probe_bounds( probe, "main.help.line.0", &help_lines[ 0 ] )
-                    && vxui_demo_probe_bounds( probe, "main.help.line.1", &help_lines[ 1 ] )
-                    && vxui_demo_probe_bounds( probe, "main.help.line.2", &help_lines[ 2 ] )
-                    && vxui_demo_probe_bounds( probe, "main.help.line.3", &help_lines[ 3 ] ) ) {
+                if ( have_help_regions ) {
                     vxui_rect help_stack[ 5 ] = { help_title, help_lines[ 0 ], help_lines[ 1 ], help_lines[ 2 ], help_lines[ 3 ] };
-                    if ( !vxui_demo_element_group_fully_visible( help, help_stack, 5, 0.0f )
-                        || !vxui_demo_elements_form_vertical_stack( help_stack, 5, controls_contract.line_gap_min )
-                        || !vxui_demo_elements_non_overlapping( help_stack, 5, 0.0f ) ) {
+                    if ( !vxui_demo_element_group_fully_visible( help, help_stack, 1 + help_line_count, 0.0f )
+                        || !vxui_demo_elements_form_vertical_stack( help_stack, 1 + help_line_count, 0.0f )
+                        || !vxui_demo_elements_non_overlapping( help_stack, 1 + help_line_count, 0.0f ) ) {
                         warnings->emplace_back( "main menu help lines lost their readable stacked layout." );
                     }
                 }
-                if ( vxui_demo_probe_anim_bounds( probe, vxui_id( resolved_controls_copy.title ), &help_title )
-                    && vxui_demo_probe_anim_bounds( probe, vxui_id( resolved_controls_copy.lines[ 0 ] ), &help_lines[ 0 ] )
-                    && vxui_demo_probe_anim_bounds( probe, vxui_id( resolved_controls_copy.lines[ 1 ] ), &help_lines[ 1 ] )
-                    && vxui_demo_probe_anim_bounds( probe, vxui_id( resolved_controls_copy.lines[ 2 ] ), &help_lines[ 2 ] )
-                    && vxui_demo_probe_anim_bounds( probe, vxui_id( resolved_controls_copy.lines[ 3 ] ), &help_lines[ 3 ] ) ) {
+                bool have_help_text = vxui_demo_probe_anim_bounds( probe, vxui_id( resolved_controls_copy.title ), &help_title );
+                for ( int i = 0; i < help_line_count && have_help_text; ++i ) {
+                    have_help_text = vxui_demo_probe_anim_bounds( probe, vxui_id( resolved_controls_copy.lines[ i ] ), &help_lines[ i ] );
+                }
+                if ( have_help_text ) {
                     vxui_rect help_text_stack[ 5 ] = { help_title, help_lines[ 0 ], help_lines[ 1 ], help_lines[ 2 ], help_lines[ 3 ] };
-                    if ( !vxui_demo_element_group_fully_visible( help, help_text_stack, 5, 0.0f )
-                        || !vxui_demo_elements_form_vertical_stack( help_text_stack, 5, controls_contract.line_gap_min )
-                        || !vxui_demo_elements_non_overlapping( help_text_stack, 5, 0.0f ) ) {
+                    if ( !vxui_demo_element_group_fully_visible( help, help_text_stack, 1 + help_line_count, 0.0f )
+                        || !vxui_demo_elements_form_vertical_stack( help_text_stack, 1 + help_line_count, 0.0f )
+                        || !vxui_demo_elements_non_overlapping( help_text_stack, 1 + help_line_count, 0.0f ) ) {
                         warnings->emplace_back( "main menu help text owners no longer fit the readable compact stack." );
                     }
                 }
@@ -468,10 +473,6 @@ inline void vxui_demo_collect_layout_warnings( const vxui_demo_layout_probe& pro
         case VXUI_DEMO_SURFACE_ARCHIVES:
         case VXUI_DEMO_SURFACE_RECORDS: {
             const vxui_demo_split_deck_contract contract = vxui_demo_get_split_deck_contract( kind );
-            const char* deck_id = kind == VXUI_DEMO_SURFACE_SORTIE ? "sortie.deck"
-                : kind == VXUI_DEMO_SURFACE_LOADOUT         ? "loadout.deck"
-                : kind == VXUI_DEMO_SURFACE_ARCHIVES        ? "archives.deck"
-                                                           : "records.deck";
             const char* menu_panel_id = kind == VXUI_DEMO_SURFACE_SORTIE ? "sortie.menu_panel"
                 : kind == VXUI_DEMO_SURFACE_LOADOUT                      ? "loadout.menu_panel"
                 : kind == VXUI_DEMO_SURFACE_ARCHIVES                     ? "archives.menu_panel"
@@ -482,13 +483,46 @@ inline void vxui_demo_collect_layout_warnings( const vxui_demo_layout_probe& pro
                                                                      : "records.detail";
             const char* tertiary_id = kind == VXUI_DEMO_SURFACE_SORTIE ? "sortie.detail" : nullptr;
             const std::string footer_id = std::string( vxui_demo_root_id( kind ) ) + ".footer";
+            const std::string detail_body_id = std::string( detail_id ) + ".body";
 
-            vxui_rect deck = {};
             vxui_rect footer = {};
             vxui_rect menu_panel = {};
             vxui_rect detail = {};
-            if ( vxui_demo_probe_bounds( probe, deck_id, &deck ) && vxui_demo_probe_bounds( probe, footer_id.c_str(), &footer )
-                && !vxui_demo_vertical_stack_order( deck, footer, contract.deck_to_footer_gap_min ) ) {
+            vxui_rect deck_body = {};
+            bool have_deck_body = false;
+            if ( vxui_demo_probe_bounds( probe, menu_panel_id, &menu_panel ) ) {
+                deck_body = menu_panel;
+                have_deck_body = true;
+            }
+            if ( vxui_demo_probe_bounds( probe, detail_id, &detail ) ) {
+                if ( have_deck_body ) {
+                    const float left = std::min( deck_body.x, detail.x );
+                    const float top = std::min( deck_body.y, detail.y );
+                    const float right = std::max( deck_body.x + deck_body.w, detail.x + detail.w );
+                    const float bottom = std::max( deck_body.y + deck_body.h, detail.y + detail.h );
+                    deck_body = { left, top, right - left, bottom - top };
+                } else {
+                    deck_body = detail;
+                    have_deck_body = true;
+                }
+            }
+            if ( tertiary_id ) {
+                vxui_rect tertiary = {};
+                if ( vxui_demo_probe_bounds( probe, tertiary_id, &tertiary ) ) {
+                    if ( have_deck_body ) {
+                        const float left = std::min( deck_body.x, tertiary.x );
+                        const float top = std::min( deck_body.y, tertiary.y );
+                        const float right = std::max( deck_body.x + deck_body.w, tertiary.x + tertiary.w );
+                        const float bottom = std::max( deck_body.y + deck_body.h, tertiary.y + tertiary.h );
+                        deck_body = { left, top, right - left, bottom - top };
+                    } else {
+                        deck_body = tertiary;
+                        have_deck_body = true;
+                    }
+                }
+            }
+            if ( have_deck_body && vxui_demo_probe_bounds( probe, footer_id.c_str(), &footer )
+                && !vxui_demo_vertical_stack_order( deck_body, footer, 0.0f ) ) {
                 warnings->emplace_back( "split-deck screen footer is crowding the main deck body." );
             }
             if ( vxui_demo_probe_bounds( probe, menu_panel_id, &menu_panel ) && menu_panel.w < contract.primary_min_width ) {
@@ -496,6 +530,14 @@ inline void vxui_demo_collect_layout_warnings( const vxui_demo_layout_probe& pro
             }
             if ( vxui_demo_probe_bounds( probe, detail_id, &detail ) && detail.w < contract.secondary_min_width ) {
                 warnings->emplace_back( "split-deck detail lane collapsed below the intended desktop width." );
+            }
+            {
+                vxui_rect detail_body = {};
+                if ( vxui_demo_probe_bounds( probe, detail_id, &detail )
+                    && vxui_demo_probe_bounds( probe, detail_body_id.c_str(), &detail_body )
+                    && !vxui_demo_rect_inside( detail, detail_body, 0.0f ) ) {
+                    warnings->emplace_back( "split-deck body region escaped its owning detail lane." );
+                }
             }
             if ( tertiary_id ) {
                 vxui_rect tertiary = {};

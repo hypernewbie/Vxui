@@ -422,42 +422,6 @@ inline vxui_menu_style vxui_demo_shared_menu_style_form_deck( const vxui_demo_sp
     return style;
 }
 
-inline void vxui_demo_shared_emit_stat_bar( vxui_ctx* ctx, const vxui_demo_split_deck_visuals& visuals, const char* id, const char* label, float value )
-{
-    const vxui_demo_command_deck_theme& theme = vxui_demo_command_deck_theme_tokens();
-    value = std::clamp( value, 0.0f, 1.0f );
-    const std::string row_id = std::string( id ) + ".row";
-    const std::string fill_id = std::string( id ) + ".fill";
-    VXUI_HASH( ctx, vxui_id( row_id.c_str() ), {
-        .layout = {
-            .sizing = { CLAY_SIZING_GROW( 0 ), CLAY_SIZING_FIT( 0 ) },
-            .childGap = 8,
-            .layoutDirection = CLAY_TOP_TO_BOTTOM,
-        },
-    } ) {
-        VXUI_LABEL( ctx, label, ( vxui_label_cfg ) {
-            .font_id = visuals.body_font_id,
-            .font_size = 18.0f,
-            .color = theme.muted_text,
-        } );
-        VXUI_HASH( ctx, vxui_id( id ), {
-            .layout = {
-                .sizing = { CLAY_SIZING_GROW( 0 ), CLAY_SIZING_FIXED( 12 ) },
-            },
-            .backgroundColor = vxui_demo_clay_color( theme.stat_track ),
-            .cornerRadius = CLAY_CORNER_RADIUS( 6 ),
-        } ) {
-            VXUI_HASH( ctx, vxui_id( fill_id.c_str() ), {
-                .layout = {
-                    .sizing = { CLAY_SIZING_FIXED( value * 220.0f ), CLAY_SIZING_GROW( 0 ) },
-                },
-                .backgroundColor = vxui_demo_clay_color( theme.stat_fill ),
-                .cornerRadius = CLAY_CORNER_RADIUS( 6 ),
-            } ) {}
-        }
-    }
-}
-
 inline const vxui_demo_shared_archive_entry* vxui_demo_shared_archive_entries_for_category( int category_index, int* out_count, const char* const** out_names )
 {
     switch ( std::clamp( category_index, 0, 2 ) ) {
@@ -730,10 +694,14 @@ inline void vxui_demo_render_loadout_screen_shared( vxui_ctx* ctx, const vxui_de
                     .layoutDirection = CLAY_TOP_TO_BOTTOM,
                 },
             } ) {
-                vxui_demo_shared_emit_stat_bar( ctx, visuals, "loadout.stat.speed", "Speed", ship.speed );
-                vxui_demo_shared_emit_stat_bar( ctx, visuals, "loadout.stat.shield", "Shield", ship.shield );
-                vxui_demo_shared_emit_stat_bar( ctx, visuals, "loadout.stat.output", "Output", ship.output );
-                vxui_demo_shared_emit_stat_bar( ctx, visuals, "loadout.stat.sync", "Sync", ship.sync );
+                const vxui_menu_stat_bar_cfg stat_cfg = {
+                    visuals.body_font_id, 18.0f,
+                    theme.muted_text, theme.stat_track, theme.stat_fill, 220.0f,
+                };
+                vxui_menu_stat_bar( ctx, "loadout.stat.speed", "Speed", ship.speed, &stat_cfg );
+                vxui_menu_stat_bar( ctx, "loadout.stat.shield", "Shield", ship.shield, &stat_cfg );
+                vxui_menu_stat_bar( ctx, "loadout.stat.output", "Output", ship.output, &stat_cfg );
+                vxui_menu_stat_bar( ctx, "loadout.stat.sync", "Sync", ship.sync, &stat_cfg );
                 VXUI_LABEL( ctx, VXUI_DEMO_SHARED_PRIMARY_NAMES[ std::clamp( cfg.selected_primary_index ? *cfg.selected_primary_index : 0, 0, 3 ) ], vxui_demo_text_style( visuals.body_font_id, 15.0f, theme.section_text ) );
                 VXUI_LABEL( ctx, VXUI_DEMO_SHARED_SUPPORT_NAMES[ std::clamp( cfg.selected_support_index ? *cfg.selected_support_index : 0, 0, 3 ) ], vxui_demo_text_style( visuals.body_font_id, 15.0f, theme.body_text ) );
                 VXUI_LABEL( ctx, VXUI_DEMO_SHARED_SYSTEM_NAMES[ std::clamp( cfg.selected_system_index ? *cfg.selected_system_index : 0, 0, 3 ) ], vxui_demo_text_style( visuals.body_font_id, 15.0f, theme.success_text ) );

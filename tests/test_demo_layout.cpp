@@ -589,30 +589,22 @@ static void demo_layout_render_title( demo_layout_fixture* fixture, const demo_l
         vxui_menu_state shell_state = {};
 
         vxui_menu_screen_begin( &fixture->ctx, &shell_state, "title.shell", &screen_cfg );
-        VXUI( &fixture->ctx, "title.hero", {
-            .layout = {
-                .sizing = { CLAY_SIZING_GROW( 0 ), CLAY_SIZING_FIT( 0 ) },
-                .padding = CLAY_PADDING_ALL( 24 ),
-                .childGap = 12,
-                .layoutDirection = CLAY_TOP_TO_BOTTOM,
-            },
-        } ) {
-            VXUI_LABEL( &fixture->ctx, demo_layout_store_localized( fixture, test_case.locale, "Command Deck", "コマンドデッキ", "منصة الأوامر" ), ( vxui_label_cfg ) {
-                .font_id = VXUI_TEST_FONT_ROLE_TITLE,
-                .font_size = 44.0f,
-            } );
-            VXUI_LABEL( &fixture->ctx, demo_layout_detail_text( fixture, test_case.locale ), ( vxui_label_cfg ) { 0 } );
-        }
-        VXUI( &fixture->ctx, "title.action_band", {
-            .layout = {
-                .sizing = { CLAY_SIZING_GROW( 0 ), CLAY_SIZING_FIT( 0 ) },
-                .padding = CLAY_PADDING_ALL( 18 ),
-                .childGap = 10,
-                .layoutDirection = CLAY_TOP_TO_BOTTOM,
-            },
-        } ) {
-            VXUI_LABEL( &fixture->ctx, demo_layout_store_localized( fixture, test_case.locale, "Enter command deck", "コマンドデッキへ", "الدخول إلى منصة الأوامر" ), ( vxui_label_cfg ) { 0 } );
-        }
+        const vxui_menu_card_cfg title_hero_card = {
+            {}, {}, 14.0f, 24, 12, 0.0f,
+        };
+        vxui_menu_card_begin( &fixture->ctx, "title.hero", &title_hero_card );
+        VXUI_LABEL( &fixture->ctx, demo_layout_store_localized( fixture, test_case.locale, "Command Deck", "コマンドデッキ", "منصة الأوامر" ), ( vxui_label_cfg ) {
+            .font_id = VXUI_TEST_FONT_ROLE_TITLE,
+            .font_size = 44.0f,
+        } );
+        VXUI_LABEL( &fixture->ctx, demo_layout_detail_text( fixture, test_case.locale ), ( vxui_label_cfg ) { 0 } );
+        vxui_menu_card_end( &fixture->ctx );
+        const vxui_menu_card_cfg title_action_card = {
+            {}, {}, 12.0f, 18, 10, 0.0f,
+        };
+        vxui_menu_card_begin( &fixture->ctx, "title.action_band", &title_action_card );
+        VXUI_LABEL( &fixture->ctx, demo_layout_store_localized( fixture, test_case.locale, "Enter command deck", "コマンドデッキへ", "الدخول إلى منصة الأوامر" ), ( vxui_label_cfg ) { 0 } );
+        vxui_menu_card_end( &fixture->ctx );
         vxui_menu_footer( &fixture->ctx, "title.footer", &screen_cfg.footer );
         vxui_menu_screen_end( &fixture->ctx, &shell_state );
     } );
@@ -1019,55 +1011,53 @@ static void demo_layout_render_credits( demo_layout_fixture* fixture, const demo
         vxui_menu_state shell_state = {};
 
         vxui_menu_screen_begin( &fixture->ctx, &shell_state, "credits.shell", &screen_cfg );
+        const vxui_menu_card_cfg credits_header_card = {
+            {}, {}, 14.0f, 18, 0, 0.0f,
+        };
+        vxui_menu_card_begin( &fixture->ctx, "credits.header", &credits_header_card );
         VXUI_LABEL( &fixture->ctx, demo_layout_store_localized( fixture, test_case.locale, "Credits", "クレジット", "الاعتمادات" ), ( vxui_label_cfg ) {
             .font_id = VXUI_TEST_FONT_ROLE_TITLE,
             .font_size = 44.0f,
         } );
-        VXUI( &fixture->ctx, "credits.stack", {
+        vxui_menu_card_end( &fixture->ctx );
+        const vxui_menu_card_cfg credits_stack_card = {
+            {}, {}, 12.0f, 20, 12, 160.0f,
+        };
+        vxui_menu_card_begin( &fixture->ctx, "credits.stack", &credits_stack_card );
+        VXUI_LABEL( &fixture->ctx, demo_layout_store_localized( fixture, test_case.locale, "Credits Stack", "クレジット構成", "هيكل الاعتمادات" ), ( vxui_label_cfg ) {
+            .font_id = VXUI_TEST_FONT_ROLE_BODY,
+            .font_size = 22.0f,
+        } );
+        VXUI( &fixture->ctx, "credits.body_viewport", {
             .layout = {
-                .sizing = { CLAY_SIZING_GROW( 0 ), CLAY_SIZING_GROW( 160.0f ) },
-                .padding = CLAY_PADDING_ALL( 20 ),
-                .childGap = 12,
+                .sizing = { CLAY_SIZING_GROW( 0 ), CLAY_SIZING_GROW( 120.0f ) },
                 .layoutDirection = CLAY_TOP_TO_BOTTOM,
             },
+            .clip = {
+                .horizontal = true,
+                .vertical = true,
+            },
         } ) {
-            VXUI_LABEL( &fixture->ctx, demo_layout_store_localized( fixture, test_case.locale, "Credits Stack", "クレジット構成", "هيكل الاعتمادات" ), ( vxui_label_cfg ) {
-                .font_id = VXUI_TEST_FONT_ROLE_BODY,
-                .font_size = 22.0f,
-            } );
-            VXUI( &fixture->ctx, "credits.body_viewport", {
+            VXUI( &fixture->ctx, "credits.body", {
                 .layout = {
-                    .sizing = { CLAY_SIZING_GROW( 0 ), CLAY_SIZING_GROW( 120.0f ) },
+                    .sizing = { CLAY_SIZING_GROW( 0 ), CLAY_SIZING_FIT( 0 ) },
+                    .padding = { 0, 0, 0, 12 },
+                    .childGap = 12,
                     .layoutDirection = CLAY_TOP_TO_BOTTOM,
                 },
-                .clip = {
-                    .horizontal = true,
-                    .vertical = true,
-                },
             } ) {
-                VXUI( &fixture->ctx, "credits.body", {
-                    .layout = {
-                        .sizing = { CLAY_SIZING_GROW( 0 ), CLAY_SIZING_FIT( 0 ) },
-                        .padding = { 0, 0, 0, 12 },
-                        .childGap = 12,
-                        .layoutDirection = CLAY_TOP_TO_BOTTOM,
-                    },
-                } ) {
-                    for ( int i = 0; i < 4; ++i ) {
-                        VXUI_LABEL( &fixture->ctx, demo_layout_detail_text( fixture, test_case.locale ), ( vxui_label_cfg ) { 0 } );
-                    }
+                for ( int i = 0; i < 4; ++i ) {
+                    VXUI_LABEL( &fixture->ctx, demo_layout_detail_text( fixture, test_case.locale ), ( vxui_label_cfg ) { 0 } );
                 }
             }
         }
-        VXUI( &fixture->ctx, "credits.actions", {
-            .layout = {
-                .sizing = { CLAY_SIZING_GROW( 0 ), CLAY_SIZING_FIT( 0 ) },
-                .padding = CLAY_PADDING_ALL( 18 ),
-                .layoutDirection = CLAY_TOP_TO_BOTTOM,
-            },
-        } ) {
-            VXUI_LABEL( &fixture->ctx, demo_layout_store_localized( fixture, test_case.locale, "Back", "戻る", "رجوع" ), ( vxui_label_cfg ) { 0 } );
-        }
+        vxui_menu_card_end( &fixture->ctx );
+        const vxui_menu_card_cfg credits_actions_card = {
+            {}, {}, 12.0f, 18, 0, 0.0f,
+        };
+        vxui_menu_card_begin( &fixture->ctx, "credits.actions", &credits_actions_card );
+        VXUI_LABEL( &fixture->ctx, demo_layout_store_localized( fixture, test_case.locale, "Back", "戻る", "رجوع" ), ( vxui_label_cfg ) { 0 } );
+        vxui_menu_card_end( &fixture->ctx );
         vxui_menu_footer( &fixture->ctx, "credits.footer", &screen_cfg.footer );
         vxui_menu_screen_end( &fixture->ctx, &shell_state );
     } );
@@ -1125,19 +1115,22 @@ static void demo_layout_render_stub_with_footer( demo_layout_fixture* fixture, c
         vxui_menu_state shell_state = {};
 
         vxui_menu_screen_begin( &fixture->ctx, &shell_state, demo_layout_store( fixture, std::string( root_id ) + ".shell" ), &screen_cfg );
+        const vxui_menu_card_cfg stub_header_card = {
+            {}, {}, 14.0f, 18, 8, 0.0f,
+        };
+        vxui_menu_card_begin( &fixture->ctx, demo_layout_store( fixture, std::string( root_id ) + ".header" ), &stub_header_card );
         VXUI_LABEL( &fixture->ctx, demo_layout_detail_text( fixture, test_case.locale ), ( vxui_label_cfg ) {
             .font_id = VXUI_TEST_FONT_ROLE_TITLE,
             .font_size = 40.0f,
         } );
-        CLAY( Clay_GetElementId( demo_layout_clay_string( demo_layout_store( fixture, std::string( root_id ) + ".actions" ) ) ), {
-            .layout = {
-                .sizing = { CLAY_SIZING_GROW( 0 ), CLAY_SIZING_FIT( 0 ) },
-                .padding = CLAY_PADDING_ALL( 18 ),
-                .layoutDirection = CLAY_TOP_TO_BOTTOM,
-            },
-        } ) {
-            VXUI_LABEL( &fixture->ctx, demo_layout_store_localized( fixture, test_case.locale, "Continue", "続行", "متابعة" ), ( vxui_label_cfg ) { 0 } );
-        }
+        vxui_menu_card_end( &fixture->ctx );
+        VXUI_LABEL( &fixture->ctx, demo_layout_store_localized( fixture, test_case.locale, "Stub description text.", "スタブの説明テキスト。", "نص وصف بديل." ), ( vxui_label_cfg ) { 0 } );
+        const vxui_menu_card_cfg stub_actions_card = {
+            {}, {}, 12.0f, 18, 10, 0.0f,
+        };
+        vxui_menu_card_begin( &fixture->ctx, demo_layout_store( fixture, std::string( root_id ) + ".actions" ), &stub_actions_card );
+        VXUI_LABEL( &fixture->ctx, demo_layout_store_localized( fixture, test_case.locale, "Continue", "続行", "متابعة" ), ( vxui_label_cfg ) { 0 } );
+        vxui_menu_card_end( &fixture->ctx );
         vxui_menu_footer( &fixture->ctx, demo_layout_store( fixture, std::string( root_id ) + ".footer" ), &screen_cfg.footer );
         vxui_menu_screen_end( &fixture->ctx, &shell_state );
     } );
@@ -1431,6 +1424,14 @@ UTEST_F_TEARDOWN( demo_layout_fixture )
 
 UTEST( demo_layout_architecture, authored_demo_files_do_not_use_direct_clay )
 {
+    // Authored demo screen composition files must not use CLAY(...) directly.
+    // Allowed Clay usage (not scanned here) includes:
+    //   - vxui.h / vxui_menu.h internals (runtime substrate)
+    //   - #ifdef VXUI_DEBUG overlay in main.cpp (debug infrastructure)
+    //   - Clay_SetCurrentContext() calls in main.cpp (context lifecycle)
+    //   - Clay_GetElementData() in debug probes (debug infrastructure)
+    //   - theme.h helpers (vxui_demo_clay_color, vxui_demo_panel_border) — only called from debug overlay
+    //   - test harnesses (test files may use Clay for structure probing)
     const char* files[] = {
         "main.cpp",
         "demo/internal/main_menu_shared.h",
@@ -2027,6 +2028,82 @@ UTEST_F( demo_layout_fixture, generated_content_stress_never_creates_unowned_ove
                         warnings.end() );
                     EXPECT_TRUE( warnings.empty() );
                 }
+            }
+        }
+    }
+}
+
+UTEST_F( demo_layout_fixture, title_screen_hero_and_action_band_cards_are_present_and_stacked )
+{
+    const demo_layout_case test_case = { "title", "en", 1280, 720, 0, DEMO_TEXT_PACK_NORMAL, DEMO_FOCUS_NONE, 0, 0 };
+    ( void ) demo_layout_render_case( utest_fixture, test_case );
+    vxui_rect hero = {};
+    vxui_rect action_band = {};
+    vxui_rect footer = {};
+    ASSERT_TRUE( demo_layout_find_hash_bounds( vxui_id( "title.hero" ), &hero ) );
+    ASSERT_TRUE( demo_layout_find_hash_bounds( vxui_id( "title.action_band" ), &action_band ) );
+    ASSERT_TRUE( demo_layout_find_element_bounds( "title.footer", &footer ) );
+    EXPECT_TRUE( hero.h > 10.0f );
+    EXPECT_TRUE( action_band.h > 10.0f );
+    EXPECT_TRUE( vxui_demo_vertical_stack_order( hero, action_band, 0.0f ) );
+    EXPECT_TRUE( vxui_demo_vertical_stack_order( action_band, footer, 0.0f ) );
+}
+
+UTEST_F( demo_layout_fixture, credits_screen_header_stack_and_actions_cards_are_present )
+{
+    const demo_layout_case test_case = { "credits", "en", 1280, 720, 0, DEMO_TEXT_PACK_NORMAL, DEMO_FOCUS_NONE, 0, 0 };
+    ( void ) demo_layout_render_case( utest_fixture, test_case );
+    vxui_rect header = {};
+    vxui_rect stack = {};
+    vxui_rect actions = {};
+    vxui_rect footer = {};
+    ASSERT_TRUE( demo_layout_find_hash_bounds( vxui_id( "credits.header" ), &header ) );
+    ASSERT_TRUE( demo_layout_find_hash_bounds( vxui_id( "credits.stack" ), &stack ) );
+    ASSERT_TRUE( demo_layout_find_hash_bounds( vxui_id( "credits.actions" ), &actions ) );
+    ASSERT_TRUE( demo_layout_find_element_bounds( "credits.footer", &footer ) );
+    EXPECT_TRUE( header.h > 10.0f );
+    EXPECT_TRUE( stack.h >= 160.0f );
+    EXPECT_TRUE( actions.h > 10.0f );
+    EXPECT_TRUE( vxui_demo_vertical_stack_order( header, stack, 0.0f ) );
+    EXPECT_TRUE( vxui_demo_vertical_stack_order( stack, actions, 0.0f ) );
+    EXPECT_TRUE( vxui_demo_vertical_stack_order( actions, footer, 0.0f ) );
+}
+
+UTEST_F( demo_layout_fixture, stub_screens_have_header_card_and_footer )
+{
+    const char* screens[] = { "launch_stub", "results_stub" };
+    for ( const char* screen : screens ) {
+        const demo_layout_case test_case = { screen, "en", 1280, 720, 0, DEMO_TEXT_PACK_NORMAL, DEMO_FOCUS_NONE, 0, 0 };
+        ( void ) demo_layout_render_case( utest_fixture, test_case );
+        const std::string header_id = std::string( screen ) + ".header";
+        const std::string footer_id = std::string( screen ) + ".footer";
+        vxui_rect header = {};
+        vxui_rect footer = {};
+        ASSERT_TRUE( demo_layout_find_hash_bounds( vxui_id( header_id.c_str() ), &header ) );
+        ASSERT_TRUE( demo_layout_find_element_bounds( footer_id.c_str(), &footer ) );
+        EXPECT_TRUE( header.h > 10.0f );
+        EXPECT_TRUE( vxui_demo_vertical_stack_order( header, footer, 0.0f ) );
+    }
+}
+
+UTEST_F( demo_layout_fixture, card_screens_pass_contract_engine_across_viewports )
+{
+    const char* screens[] = { "title", "credits", "launch_stub", "results_stub" };
+    const char* locales[] = { "en", "ja-JP", "ar" };
+    const int sizes[][ 2 ] = { { 1280, 720 }, { 1100, 720 }, { 960, 720 } };
+    for ( const char* screen : screens ) {
+        for ( const char* locale : locales ) {
+            for ( const auto& size : sizes ) {
+                const demo_layout_case test_case = { screen, locale, size[ 0 ], size[ 1 ], 0, DEMO_TEXT_PACK_LONG, DEMO_FOCUS_NONE, 0, 0 };
+                vxui_draw_list list = demo_layout_render_case( utest_fixture, test_case );
+                std::vector< std::string > warnings = demo_layout_collect_warnings( utest_fixture, &list, screen );
+                warnings.erase(
+                    std::remove_if(
+                        warnings.begin(),
+                        warnings.end(),
+                        []( const std::string& warning ) { return warning == "focused element drifted outside the bounded surface."; } ),
+                    warnings.end() );
+                EXPECT_TRUE( warnings.empty() );
             }
         }
     }

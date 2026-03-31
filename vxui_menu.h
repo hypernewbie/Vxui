@@ -314,6 +314,49 @@ void vxui_menu_help_legend( vxui_ctx* ctx, const char* id, const vxui_menu_help_
 void vxui_menu_footer( vxui_ctx* ctx, const char* id, const vxui_menu_footer_cfg* cfg );
 bool vxui_menu_screen_is_compact( vxui_ctx* ctx );
 
+typedef struct vxui_menu_card_cfg
+{
+    vxui_color fill_color;
+    vxui_color border_color;
+    float corner_radius;
+    uint16_t padding;
+    uint16_t gap;
+    float min_height; // 0 = SIZING_FIT(0), >0 = SIZING_GROW(min_height)
+} vxui_menu_card_cfg;
+
+typedef struct vxui_menu_button_cfg
+{
+    vxui_action_fn fn;
+    vxui_action_cfg action_cfg;
+    float height;
+    float corner_radius;
+    uint16_t padding_x;
+    uint16_t padding_y;
+    uint32_t font_id;
+    float font_size;
+    vxui_color fill;
+    vxui_color fill_focus;
+    vxui_color border;
+    vxui_color border_focus;
+    vxui_color text;
+    vxui_color text_focus;
+} vxui_menu_button_cfg;
+
+typedef struct vxui_menu_stat_bar_cfg
+{
+    uint32_t font_id;
+    float font_size;
+    vxui_color label_color;
+    vxui_color track_color;
+    vxui_color fill_color;
+    float fill_width; // total pixel width the fill value scales against
+} vxui_menu_stat_bar_cfg;
+
+void vxui_menu_card_begin( vxui_ctx* ctx, const char* id, const vxui_menu_card_cfg* cfg );
+void vxui_menu_card_end( vxui_ctx* ctx );
+void vxui_menu_button( vxui_ctx* ctx, const char* id, const char* label_key, const vxui_menu_button_cfg* cfg );
+void vxui_menu_stat_bar( vxui_ctx* ctx, const char* id, const char* label, float value, const vxui_menu_stat_bar_cfg* cfg );
+
 #ifdef VXUI_MENU_IMPL
 
 #ifndef VXUI_IMPL
@@ -2399,6 +2442,110 @@ bool vxui_menu_screen_is_compact( vxui_ctx* ctx )
 {
     vxui_menu__screen_scope* scope = vxui_menu__current_screen_scope();
     return scope && scope->ctx == ctx && scope->compact;
+}
+
+void vxui_menu_card_begin( vxui_ctx* ctx, const char* id, const vxui_menu_card_cfg* cfg )
+{
+    if ( !ctx || !id ) {
+        return;
+    }
+    const vxui_menu_card_cfg c = cfg ? *cfg : ( vxui_menu_card_cfg ){};
+    ctx->current_decl_id = vxui_id( id );
+    Clay__OpenElementWithId( vxui__clay_id_from_hash( vxui_id( id ) ) );
+    Clay__ConfigureOpenElement( ( Clay_ElementDeclaration ) {
+        .layout = {
+            .sizing = {
+                CLAY_SIZING_GROW( 0 ),
+                c.min_height > 0.0f ? CLAY_SIZING_GROW( c.min_height ) : CLAY_SIZING_FIT( 0 ),
+            },
+            .padding = CLAY_PADDING_ALL( c.padding ),
+            .childGap = c.gap,
+            .layoutDirection = CLAY_TOP_TO_BOTTOM,
+        },
+        .backgroundColor = vxui_menu__to_clay_color( c.fill_color ),
+        .cornerRadius = CLAY_CORNER_RADIUS( c.corner_radius ),
+        .border = {
+            .color = vxui_menu__to_clay_color( c.border_color ),
+            .width = { 1, 1, 1, 1, 1 },
+        },
+    } );
+}
+
+void vxui_menu_card_end( vxui_ctx* ctx )
+{
+    ( void ) ctx;
+    Clay__CloseElement();
+}
+
+void vxui_menu_button( vxui_ctx* ctx, const char* id, const char* label_key, const vxui_menu_button_cfg* cfg )
+{
+    if ( !ctx || !id ) {
+        return;
+    }
+    const vxui_menu_button_cfg c = cfg ? *cfg : ( vxui_menu_button_cfg ){};
+    const uint32_t action_id = vxui_id( id );
+    vxui__register_action( ctx, action_id, c.fn, c.action_cfg );
+    vxui__get_anim_state( ctx, action_id, true );
+    ctx->current_decl_id = action_id;
+    const bool focused = ctx->focused_id == action_id;
+    Clay__OpenElementWithId( vxui__clay_id_from_hash( action_id ) );
+    Clay__ConfigureOpenElement( ( Clay_ElementDeclaration ) {
+        .layout = {
+            .sizing = { CLAY_SIZING_FIT( 0 ), CLAY_SIZING_FIXED( c.height ) },
+            .padding = { c.padding_x, c.padding_x, c.padding_y, c.padding_y },
+            .childAlignment = { .y = CLAY_ALIGN_Y_CENTER },
+        },
+        .backgroundColor = vxui_menu__to_clay_color( focused ? c.fill_focus : c.fill ),
+        .cornerRadius = CLAY_CORNER_RADIUS( c.corner_radius ),
+        .border = {
+            .color = vxui_menu__to_clay_color( focused ? c.border_focus : c.border ),
+            .width = { 1, 1, 1, 1, 1 },
+        },
+    } );
+    vxui_menu__emit_text_leaf( ctx, action_id, label_key, c.font_id, c.font_size, focused ? c.text_focus : c.text );
+    Clay__CloseElement();
+}
+
+void vxui_menu_stat_bar( vxui_ctx* ctx, const char* id, const char* label, float value, const vxui_menu_stat_bar_cfg* cfg )
+{
+    if ( !ctx || !id ) {
+        return;
+    }
+    const vxui_menu_stat_bar_cfg c = cfg ? *cfg : ( vxui_menu_stat_bar_cfg ){};
+    value = value < 0.0f ? 0.0f : ( value > 1.0f ? 1.0f : value );
+    const float fill_width = c.fill_width > 0.0f ? c.fill_width : 220.0f;
+    const char* row_id = vxui_menu__push_child_id( ctx, id, "row" );
+    const char* fill_id = vxui_menu__push_child_id( ctx, id, "fill" );
+    Clay__OpenElementWithId( vxui__clay_id_from_hash( vxui_id( row_id ) ) );
+    Clay__ConfigureOpenElement( ( Clay_ElementDeclaration ) {
+        .layout = {
+            .sizing = { CLAY_SIZING_GROW( 0 ), CLAY_SIZING_FIT( 0 ) },
+            .childGap = 8,
+            .layoutDirection = CLAY_TOP_TO_BOTTOM,
+        },
+    } );
+    if ( label ) {
+        vxui_menu__emit_text_leaf( ctx, vxui_id( row_id ), label, c.font_id, c.font_size, c.label_color );
+    }
+    Clay__OpenElementWithId( vxui__clay_id_from_hash( vxui_id( id ) ) );
+    Clay__ConfigureOpenElement( ( Clay_ElementDeclaration ) {
+        .layout = {
+            .sizing = { CLAY_SIZING_GROW( 0 ), CLAY_SIZING_FIXED( 12 ) },
+        },
+        .backgroundColor = vxui_menu__to_clay_color( c.track_color ),
+        .cornerRadius = CLAY_CORNER_RADIUS( 6 ),
+    } );
+    Clay__OpenElementWithId( vxui__clay_id_from_hash( vxui_id( fill_id ) ) );
+    Clay__ConfigureOpenElement( ( Clay_ElementDeclaration ) {
+        .layout = {
+            .sizing = { CLAY_SIZING_FIXED( value * fill_width ), CLAY_SIZING_GROW( 0 ) },
+        },
+        .backgroundColor = vxui_menu__to_clay_color( c.fill_color ),
+        .cornerRadius = CLAY_CORNER_RADIUS( 6 ),
+    } );
+    Clay__CloseElement();
+    Clay__CloseElement();
+    Clay__CloseElement();
 }
 
 #endif

@@ -365,8 +365,6 @@ static bool vxui_demo_locale_matches( const char* locale, const char* prefix );
 static vxui_demo_font_metrics vxui_demo_resolve_font_metrics( const vxui_demo_renderer* renderer, uint32_t requested_font_id, float requested_font_size, const char* locale );
 static void vxui_demo_font_resolver( vxui_ctx* ctx, uint32_t requested_font_id, float requested_font_size, const char* locale, void* userdata, vxui_resolved_font* out );
 static float vxui_demo_control_height( const vxui_demo_renderer* renderer, const char* locale );
-static void vxui_demo_emit_save_slot_row( vxui_ctx* ctx, const char* id, const char* label_key, float width, float height, bool rtl );
-static void vxui_demo_emit_action_button( vxui_ctx* ctx, const char* id, const char* l10n_key, vxui_action_fn fn, vxui_action_cfg cfg, float control_height );
 static bool vxui_demo_get_anim_bounds( const vxui_ctx* ctx, uint32_t id, vxui_rect* out );
 static void vxui_demo_step_settings_body_scroll( vxui_demo_app* app, float dt );
 static void vxui_demo_sync_settings_body_scroll( vxui_demo_app* app, const vxui_ctx* ctx );
@@ -1156,60 +1154,6 @@ static float vxui_demo_control_height( const vxui_demo_renderer* renderer, const
 {
     vxui_demo_font_metrics metrics = vxui_demo_resolve_font_metrics( renderer, VXUI_DEMO_FONT_ROLE_BODY, ( float ) VXUI_DEMO_BODY_SIZE, locale );
     return std::max( 32.0f, metrics.line_height + VXUI_DEMO_BUTTON_PADDING_Y * 2.0f );
-}
-
-static void vxui_demo_emit_save_slot_row( vxui_ctx* ctx, const char* id, const char* label_key, float width, float height, bool rtl )
-{
-    const vxui_demo_command_deck_theme& theme = vxui_demo_command_deck_theme_tokens();
-    const uint32_t action_id = vxui_id( id );
-    vxui__register_action( ctx, action_id, nullptr, ( vxui_action_cfg ) { 0 } );
-    vxui__get_anim_state( ctx, action_id, true );
-    ctx->current_decl_id = action_id;
-
-    const bool focused = ctx->focused_id == action_id;
-    VXUI_HASH( ctx, action_id, {
-        .layout = {
-            .sizing = { CLAY_SIZING_FIXED( width ), CLAY_SIZING_FIXED( height ) },
-            .padding = { 14, 14, 8, 8 },
-            .childAlignment = { .x = rtl ? CLAY_ALIGN_X_RIGHT : CLAY_ALIGN_X_LEFT, .y = CLAY_ALIGN_Y_CENTER },
-        },
-        .backgroundColor = vxui_demo_clay_color( focused ? theme.focused_row_fill : theme.passive_row_fill ),
-        .cornerRadius = CLAY_CORNER_RADIUS( 8 ),
-        .border = vxui_demo_panel_border( focused ? theme.focused_row_border : theme.passive_row_border, 1 ),
-    } ) {
-        VXUI_LABEL( ctx, label_key, ( vxui_label_cfg ) { 0 } );
-    }
-}
-
-static void vxui_demo_emit_action_button( vxui_ctx* ctx, const char* id, const char* l10n_key, vxui_action_fn fn, vxui_action_cfg cfg, float control_height )
-{
-    const vxui_demo_command_deck_theme& theme = vxui_demo_command_deck_theme_tokens();
-    const char* resolved = vxui__resolve_text( ctx, l10n_key );
-    uint32_t action_id = vxui_id( id );
-
-    vxui__register_action( ctx, action_id, fn, cfg );
-    vxui__get_anim_state( ctx, action_id, true );
-    ctx->current_decl_id = action_id;
-    const bool focused = ctx->focused_id == action_id;
-
-    VXUI_HASH( ctx, action_id, {
-        .layout = {
-            .sizing = { CLAY_SIZING_FIT( 0 ), CLAY_SIZING_FIXED( control_height ) },
-            .padding = { ( uint16_t ) VXUI_DEMO_BUTTON_PADDING_X, ( uint16_t ) VXUI_DEMO_BUTTON_PADDING_X, ( uint16_t ) VXUI_DEMO_BUTTON_PADDING_Y, ( uint16_t ) VXUI_DEMO_BUTTON_PADDING_Y },
-            .childAlignment = { .y = CLAY_ALIGN_Y_CENTER },
-        },
-        .backgroundColor = vxui_demo_clay_color( focused ? theme.focused_row_fill : theme.action_fill ),
-        .cornerRadius = CLAY_CORNER_RADIUS( 8 ),
-        .border = vxui_demo_panel_border( focused ? theme.focused_row_border : theme.action_border, 1 ),
-    } ) {
-        vxui__emit_text(
-            ctx,
-            resolved,
-            VXUI_DEMO_FONT_ROLE_BODY,
-            ( float ) VXUI_DEMO_BODY_SIZE,
-            focused ? theme.title_text : theme.action_text,
-            action_id );
-    }
 }
 
 #ifdef VXUI_DEBUG
@@ -2956,56 +2900,60 @@ static void vxui_demo_render_fontcache_drawlist( vxui_demo_renderer* renderer, c
             current_pass_group = -1;
         }
     };
-    auto begin_pass_group = [&]( int new_group, const char* name )
+    auto begin_pass_group = [&]( int new_group, const char* name ) -> bool
     {
-        if ( current_pass_group != new_group )
-        {
-            end_pass_group();
-            vxui_demo_gl_debug_begin( renderer, name );
-            current_pass_group = new_group;
+        if ( current_pass_group == new_group ) {
+            return false;
         }
+        end_pass_group();
+        vxui_demo_gl_debug_begin( renderer, name );
+        current_pass_group = new_group;
+        return true;
     };
 
-    for ( ve_fontcache_draw& dcall : drawlist->dcalls ) {
+    for ( size_t dcall_idx = 0; dcall_idx < drawlist->dcalls.size(); ++dcall_idx ) {
+        ve_fontcache_draw& dcall = drawlist->dcalls[ dcall_idx ];
         if ( dcall.pass == VE_FONTCACHE_FRAMEBUFFER_PASS_GLYPH ) {
-            begin_pass_group( 0, "VEFC Glyph Pass" );
-            glUseProgram( renderer->fontcache_shader_render_glyph );
-            glBindFramebuffer( GL_FRAMEBUFFER, renderer->fontcache_fbo[ 0 ] );
-            glBlendFunc( GL_ONE_MINUS_DST_COLOR, GL_ONE_MINUS_SRC_COLOR );
-            glViewport( 0, 0, VE_FONTCACHE_GLYPHDRAW_BUFFER_WIDTH, VE_FONTCACHE_GLYPHDRAW_BUFFER_HEIGHT );
-            glEnable( GL_SCISSOR_TEST );
-            glScissor( 0, 0, VE_FONTCACHE_GLYPHDRAW_BUFFER_WIDTH, VE_FONTCACHE_GLYPHDRAW_BUFFER_HEIGHT );
-            glDisable( GL_FRAMEBUFFER_SRGB );
+            if ( begin_pass_group( 0, "VEFC Glyph Pass" ) ) {
+                glUseProgram( renderer->fontcache_shader_render_glyph );
+                glBindFramebuffer( GL_FRAMEBUFFER, renderer->fontcache_fbo[ 0 ] );
+                glBlendFunc( GL_ONE_MINUS_DST_COLOR, GL_ONE_MINUS_SRC_COLOR );
+                glViewport( 0, 0, VE_FONTCACHE_GLYPHDRAW_BUFFER_WIDTH, VE_FONTCACHE_GLYPHDRAW_BUFFER_HEIGHT );
+                glEnable( GL_SCISSOR_TEST );
+                glScissor( 0, 0, VE_FONTCACHE_GLYPHDRAW_BUFFER_WIDTH, VE_FONTCACHE_GLYPHDRAW_BUFFER_HEIGHT );
+                glDisable( GL_FRAMEBUFFER_SRGB );
+            }
         } else if ( dcall.pass == VE_FONTCACHE_FRAMEBUFFER_PASS_ATLAS ) {
-            begin_pass_group( 1, "VEFC Atlas Blit" );
-            glUseProgram( renderer->fontcache_shader_blit_atlas );
-            glBindFramebuffer( GL_FRAMEBUFFER, renderer->fontcache_fbo[ 1 ] );
-            glBlendFunc( GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA );
-            glViewport( 0, 0, VE_FONTCACHE_ATLAS_WIDTH, VE_FONTCACHE_ATLAS_HEIGHT );
-            glEnable( GL_SCISSOR_TEST );
-            glScissor( 0, 0, VE_FONTCACHE_ATLAS_WIDTH, VE_FONTCACHE_ATLAS_HEIGHT );
+            if ( begin_pass_group( 1, "VEFC Atlas Blit" ) ) {
+                glUseProgram( renderer->fontcache_shader_blit_atlas );
+                glBindFramebuffer( GL_FRAMEBUFFER, renderer->fontcache_fbo[ 1 ] );
+                glBlendFunc( GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA );
+                glViewport( 0, 0, VE_FONTCACHE_ATLAS_WIDTH, VE_FONTCACHE_ATLAS_HEIGHT );
+                glEnable( GL_SCISSOR_TEST );
+                glScissor( 0, 0, VE_FONTCACHE_ATLAS_WIDTH, VE_FONTCACHE_ATLAS_HEIGHT );
+                glDisable( GL_FRAMEBUFFER_SRGB );
+            }
             glUniform1ui( renderer->uniforms.blit_atlas.region, dcall.region );
             glActiveTexture( GL_TEXTURE0 );
             glBindTexture( GL_TEXTURE_2D, renderer->fontcache_fbo_texture[ 0 ] );
-            glDisable( GL_FRAMEBUFFER_SRGB );
         } else if ( dcall.pass == VE_FONTCACHE_FRAMEBUFFER_PASS_TARGET || dcall.pass == VE_FONTCACHE_FRAMEBUFFER_PASS_TARGET_UNCACHED || dcall.pass == VE_FONTCACHE_FRAMEBUFFER_PASS_TARGET_CPU_CACHED ) {
-            begin_pass_group( 2, "VEFC Target Text" );
-            glUseProgram( renderer->fontcache_shader_draw_text );
-            GLuint target_fbo = renderer->backend_test_mode ? renderer->backend_target_fbo : ( renderer->shot_capture_mode ? renderer->shot_capture_fbo : 0u );
-            glBindFramebuffer( GL_FRAMEBUFFER, target_fbo );
-            glBlendFunc( GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA );
-            glViewport( 0, 0, renderer->window_size.width, renderer->window_size.height );
-            if ( clip_rect && clip_rect->w > 0.0f && clip_rect->h > 0.0f ) {
-                GLint x = ( GLint ) std::lround( clip_rect->x );
-                GLint y = ( GLint ) std::lround( ( float ) renderer->window_size.height - clip_rect->y - clip_rect->h );
-                GLsizei w = ( GLsizei ) std::lround( clip_rect->w );
-                GLsizei h = ( GLsizei ) std::lround( clip_rect->h );
-                glEnable( GL_SCISSOR_TEST );
-                glScissor( x, y, w < 0 ? 0 : w, h < 0 ? 0 : h );
-            } else {
-                glDisable( GL_SCISSOR_TEST );
+            if ( begin_pass_group( 2, "VEFC Target Text" ) ) {
+                glUseProgram( renderer->fontcache_shader_draw_text );
+                GLuint target_fbo = renderer->backend_test_mode ? renderer->backend_target_fbo : ( renderer->shot_capture_mode ? renderer->shot_capture_fbo : 0u );
+                glBindFramebuffer( GL_FRAMEBUFFER, target_fbo );
+                glBlendFunc( GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA );
+                glViewport( 0, 0, renderer->window_size.width, renderer->window_size.height );
+                if ( clip_rect && clip_rect->w > 0.0f && clip_rect->h > 0.0f ) {
+                    GLint x = ( GLint ) std::lround( clip_rect->x );
+                    GLint y = ( GLint ) std::lround( ( float ) renderer->window_size.height - clip_rect->y - clip_rect->h );
+                    GLsizei w = ( GLsizei ) std::lround( clip_rect->w );
+                    GLsizei h = ( GLsizei ) std::lround( clip_rect->h );
+                    glEnable( GL_SCISSOR_TEST );
+                    glScissor( x, y, w < 0 ? 0 : w, h < 0 ? 0 : h );
+                } else {
+                    glDisable( GL_SCISSOR_TEST );
+                }
             }
-            GLuint src_tex = 0;
 #ifdef VE_FONTCACHE_FREETYPE_RASTERISATION
             if ( dcall.pass == VE_FONTCACHE_FRAMEBUFFER_PASS_TARGET_CPU_CACHED ) {
                 if ( dcall.atlas_page >= ( uint32_t ) renderer->cpu_atlas_textures.size() ) {
@@ -3014,15 +2962,13 @@ static void vxui_demo_render_fontcache_drawlist( vxui_demo_renderer* renderer, c
                     glUniform1ui( renderer->uniforms.draw_text.downsample, 0 );
                     glActiveTexture( GL_TEXTURE0 );
                     glBindTexture( GL_TEXTURE_2D, renderer->cpu_atlas_textures[ dcall.atlas_page ] );
-                    src_tex = renderer->cpu_atlas_textures[ dcall.atlas_page ];
                 }
             } else
 #endif
             {
                 glUniform1ui( renderer->uniforms.draw_text.downsample, dcall.pass == VE_FONTCACHE_FRAMEBUFFER_PASS_TARGET_UNCACHED ? 1u : 0u );
                 glActiveTexture( GL_TEXTURE0 );
-                src_tex = dcall.pass == VE_FONTCACHE_FRAMEBUFFER_PASS_TARGET_UNCACHED ? renderer->fontcache_fbo_texture[ 0 ] : renderer->fontcache_fbo_texture[ 1 ];
-                glBindTexture( GL_TEXTURE_2D, src_tex );
+                glBindTexture( GL_TEXTURE_2D, dcall.pass == VE_FONTCACHE_FRAMEBUFFER_PASS_TARGET_UNCACHED ? renderer->fontcache_fbo_texture[ 0 ] : renderer->fontcache_fbo_texture[ 1 ] );
             }
             glUniform4fv( renderer->uniforms.draw_text.colour, 1, dcall.colour );
 #ifdef VE_FONTCACHE_FREETYPE_RASTERISATION
@@ -3857,6 +3803,8 @@ int main( int argc, char** argv )
         return 0;
     }
 
+    manager->SetWindowSwapInterval( window.get(), 1 );
+
     std::chrono::steady_clock::time_point previous = std::chrono::steady_clock::now();
     const std::chrono::steady_clock::duration kInteractiveFrameBudget =
         std::chrono::duration_cast< std::chrono::steady_clock::duration >( std::chrono::duration< double >( 1.0 / 60.0 ) );
@@ -4481,42 +4429,6 @@ static void vxui_demo_prompt_table_changed( vxui_ctx* ctx, int value, void* user
     vxui_demo_apply_prompt_table_index( ctx, ( vxui_demo_app* ) userdata, value );
 }
 
-static void vxui_demo_emit_stat_bar( vxui_ctx* ctx, const char* id, const char* label, float value )
-{
-    const vxui_demo_command_deck_theme& theme = vxui_demo_command_deck_theme_tokens();
-    value = std::clamp( value, 0.0f, 1.0f );
-    const std::string row_id = std::string( id ) + ".row";
-    const std::string fill_id = std::string( id ) + ".fill";
-    VXUI_HASH( ctx, vxui_id( row_id.c_str() ), {
-        .layout = {
-            .sizing = { CLAY_SIZING_GROW( 0 ), CLAY_SIZING_FIT( 0 ) },
-            .childGap = 8,
-            .layoutDirection = CLAY_TOP_TO_BOTTOM,
-        },
-    } ) {
-        VXUI_LABEL( ctx, label, ( vxui_label_cfg ) {
-            .font_id = VXUI_DEMO_FONT_ROLE_BODY,
-            .font_size = 18.0f,
-            .color = theme.muted_text,
-        } );
-        VXUI_HASH( ctx, vxui_id( id ), {
-            .layout = {
-                .sizing = { CLAY_SIZING_GROW( 0 ), CLAY_SIZING_FIXED( 12 ) },
-            },
-            .backgroundColor = vxui_demo_clay_color( theme.stat_track ),
-            .cornerRadius = CLAY_CORNER_RADIUS( 6 ),
-        } ) {
-            VXUI_HASH( ctx, vxui_id( fill_id.c_str() ), {
-                .layout = {
-                    .sizing = { CLAY_SIZING_FIXED( value * 220.0f ), CLAY_SIZING_GROW( 0 ) },
-                },
-                .backgroundColor = vxui_demo_clay_color( theme.stat_fill ),
-                .cornerRadius = CLAY_CORNER_RADIUS( 6 ),
-            } ) {}
-        }
-    }
-}
-
 static void vxui_demo_emit_surface_scanline( vxui_ctx* ctx, const char* root_id )
 {
     const vxui_demo_command_deck_theme& theme = vxui_demo_command_deck_theme_tokens();
@@ -4594,9 +4506,15 @@ static void vxui_demo_render_boot_screen( vxui_demo_app* app, vxui_ctx* ctx )
             .font_size = 26.0f,
             .color = theme.accent_cool,
         } );
-        vxui_demo_emit_stat_bar( ctx, "boot.bar.sync", "Link Sync", 0.92f );
-        vxui_demo_emit_stat_bar( ctx, "boot.bar.safety", "Safety Envelope", 0.78f );
-        vxui_demo_emit_stat_bar( ctx, "boot.bar.radar", "Radar Uplink", 0.84f );
+        {
+            const vxui_menu_stat_bar_cfg stat_cfg = {
+                VXUI_DEMO_FONT_ROLE_BODY, 18.0f,
+                theme.muted_text, theme.stat_track, theme.stat_fill, 220.0f,
+            };
+            vxui_menu_stat_bar( ctx, "boot.bar.sync", "Link Sync", 0.92f, &stat_cfg );
+            vxui_menu_stat_bar( ctx, "boot.bar.safety", "Safety Envelope", 0.78f, &stat_cfg );
+            vxui_menu_stat_bar( ctx, "boot.bar.radar", "Radar Uplink", 0.84f, &stat_cfg );
+        }
         vxui_menu_footer( ctx, "boot.footer", &screen_cfg.footer );
         vxui_menu_screen_end( ctx, &shell_state );
     }
@@ -4689,24 +4607,28 @@ static void vxui_demo_render_title_screen( vxui_demo_app* app, vxui_ctx* ctx, co
             } );
         }
 
-        VXUI( ctx, "title.action_band", {
-            .layout = {
-                .sizing = { CLAY_SIZING_GROW( 0 ), CLAY_SIZING_FIT( 0 ) },
-                .padding = CLAY_PADDING_ALL( 18 ),
-                .childGap = 12,
-                .layoutDirection = CLAY_TOP_TO_BOTTOM,
-            },
-            .backgroundColor = vxui_demo_clay_color( theme.utility_fill ),
-            .cornerRadius = CLAY_CORNER_RADIUS( 12 ),
-            .border = vxui_demo_panel_border( theme.utility_border, 1 ),
-        } ) {
-            vxui_demo_emit_action_button( ctx, "title.enter", "title.prompt", vxui_demo_open_main_menu, ( vxui_action_cfg ) {
-                .userdata = app,
-            }, control_height );
+        {
+            const vxui_menu_card_cfg card_cfg = {
+                theme.utility_fill, theme.utility_border, 12.0f, 18, 12, 0.0f,
+            };
+            vxui_menu_card_begin( ctx, "title.action_band", &card_cfg );
             {
-                vxui_demo_decl_scope title_enter_decl( ctx, vxui_id( "title.enter" ) );
-                VXUI_TRAIT( VXUI_TRAIT_GLOW, ( vxui_demo_glow ) { .padding = 6.0f, .alpha = 0.18f } );
+                const vxui_menu_button_cfg btn_cfg = {
+                    vxui_demo_open_main_menu, { .userdata = app },
+                    control_height, 8.0f,
+                    ( uint16_t ) VXUI_DEMO_BUTTON_PADDING_X, ( uint16_t ) VXUI_DEMO_BUTTON_PADDING_Y,
+                    VXUI_DEMO_FONT_ROLE_BODY, ( float ) VXUI_DEMO_BODY_SIZE,
+                    theme.action_fill, theme.focused_row_fill,
+                    theme.action_border, theme.focused_row_border,
+                    theme.action_text, theme.title_text,
+                };
+                vxui_menu_button( ctx, "title.enter", "title.prompt", &btn_cfg );
+                {
+                    vxui_demo_decl_scope title_enter_decl( ctx, vxui_id( "title.enter" ) );
+                    VXUI_TRAIT( VXUI_TRAIT_GLOW, ( vxui_demo_glow ) { .padding = 6.0f, .alpha = 0.18f } );
+                }
             }
+            vxui_menu_card_end( ctx );
         }
         vxui_menu_footer( ctx, "title.footer", &screen_cfg.footer );
         vxui_menu_screen_end( ctx, &shell_state );
@@ -5142,20 +5064,24 @@ static void vxui_demo_render_credits_screen( vxui_demo_app* app, vxui_ctx* ctx, 
             }
         }
 
-        VXUI( ctx, "credits.actions", {
-            .layout = {
-                .sizing = { CLAY_SIZING_GROW( 0 ), CLAY_SIZING_FIT( 0 ) },
-                .padding = CLAY_PADDING_ALL( 18 ),
-                .childGap = 12,
-                .layoutDirection = CLAY_TOP_TO_BOTTOM,
-            },
-            .backgroundColor = vxui_demo_clay_color( theme.utility_fill ),
-            .cornerRadius = CLAY_CORNER_RADIUS( 12 ),
-            .border = vxui_demo_panel_border( theme.utility_border, 1 ),
-        } ) {
-            vxui_demo_emit_action_button( ctx, "credits.back", "menu.return_command_deck", vxui_demo_open_main_menu, ( vxui_action_cfg ) {
-                .userdata = app,
-            }, control_height );
+        {
+            const vxui_menu_card_cfg card_cfg = {
+                theme.utility_fill, theme.utility_border, 12.0f, 18, 12, 0.0f,
+            };
+            vxui_menu_card_begin( ctx, "credits.actions", &card_cfg );
+            {
+                const vxui_menu_button_cfg btn_cfg = {
+                    vxui_demo_open_main_menu, { .userdata = app },
+                    control_height, 8.0f,
+                    ( uint16_t ) VXUI_DEMO_BUTTON_PADDING_X, ( uint16_t ) VXUI_DEMO_BUTTON_PADDING_Y,
+                    VXUI_DEMO_FONT_ROLE_BODY, ( float ) VXUI_DEMO_BODY_SIZE,
+                    theme.action_fill, theme.focused_row_fill,
+                    theme.action_border, theme.focused_row_border,
+                    theme.action_text, theme.title_text,
+                };
+                vxui_menu_button( ctx, "credits.back", "menu.return_command_deck", &btn_cfg );
+            }
+            vxui_menu_card_end( ctx );
         }
         vxui_menu_footer( ctx, "credits.footer", &screen_cfg.footer );
         vxui_menu_screen_end( ctx, &shell_state );
@@ -5236,7 +5162,13 @@ static void vxui_demo_render_launch_stub_screen( vxui_demo_app* app, vxui_ctx* c
             VXUI_LABEL( ctx, mission.name, vxui_demo_text_style( VXUI_DEMO_FONT_ROLE_SECTION, 24.0f, theme.accent_cool ) );
         }
         VXUI_LABEL( ctx, "Launch path is a stub front-end handoff; no gameplay runtime exists in this sample.", vxui_demo_text_style( VXUI_DEMO_FONT_ROLE_BODY, 20.0f, theme.body_text ) );
-        vxui_demo_emit_stat_bar( ctx, "launch_stub.progress", "Launch Sync", progress );
+        {
+            const vxui_menu_stat_bar_cfg stat_cfg = {
+                VXUI_DEMO_FONT_ROLE_BODY, 18.0f,
+                theme.muted_text, theme.stat_track, theme.stat_fill, 220.0f,
+            };
+            vxui_menu_stat_bar( ctx, "launch_stub.progress", "Launch Sync", progress, &stat_cfg );
+        }
         vxui_menu_footer( ctx, "launch_stub.footer", &screen_cfg.footer );
         vxui_menu_screen_end( ctx, &shell_state );
     }
@@ -5317,20 +5249,24 @@ static void vxui_demo_render_results_stub_screen( vxui_demo_app* app, vxui_ctx* 
             VXUI_LABEL( ctx, record.clear_text, vxui_demo_text_style( VXUI_DEMO_FONT_ROLE_BODY, 20.0f, theme.success_text ) );
         }
         VXUI_LABEL( ctx, "The front-end loop is complete: sortie selection, launch handoff, and debrief all return to the command deck without hidden gameplay state.", vxui_demo_text_style( VXUI_DEMO_FONT_ROLE_BODY, 20.0f, theme.body_text ) );
-        VXUI( ctx, "results_stub.actions", {
-            .layout = {
-                .sizing = { CLAY_SIZING_GROW( 0 ), CLAY_SIZING_FIT( 0 ) },
-                .padding = CLAY_PADDING_ALL( 18 ),
-                .childGap = 10,
-                .layoutDirection = CLAY_TOP_TO_BOTTOM,
-            },
-            .backgroundColor = vxui_demo_clay_color( theme.utility_fill ),
-            .cornerRadius = CLAY_CORNER_RADIUS( 12 ),
-            .border = vxui_demo_panel_border( theme.utility_border, 1 ),
-        } ) {
-            vxui_demo_emit_action_button( ctx, "results_stub.return", "menu.return_command_deck", vxui_demo_open_main_menu, ( vxui_action_cfg ) {
-                .userdata = app,
-            }, control_height );
+        {
+            const vxui_menu_card_cfg card_cfg = {
+                theme.utility_fill, theme.utility_border, 12.0f, 18, 10, 0.0f,
+            };
+            vxui_menu_card_begin( ctx, "results_stub.actions", &card_cfg );
+            {
+                const vxui_menu_button_cfg btn_cfg = {
+                    vxui_demo_open_main_menu, { .userdata = app },
+                    control_height, 8.0f,
+                    ( uint16_t ) VXUI_DEMO_BUTTON_PADDING_X, ( uint16_t ) VXUI_DEMO_BUTTON_PADDING_Y,
+                    VXUI_DEMO_FONT_ROLE_BODY, ( float ) VXUI_DEMO_BODY_SIZE,
+                    theme.action_fill, theme.focused_row_fill,
+                    theme.action_border, theme.focused_row_border,
+                    theme.action_text, theme.title_text,
+                };
+                vxui_menu_button( ctx, "results_stub.return", "menu.return_command_deck", &btn_cfg );
+            }
+            vxui_menu_card_end( ctx );
         }
         vxui_menu_footer( ctx, "results_stub.footer", &screen_cfg.footer );
         vxui_menu_screen_end( ctx, &shell_state );

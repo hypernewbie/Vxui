@@ -61,15 +61,6 @@ struct vxui_demo_controls_block_visuals
     uint8_t visible_line_count;
 };
 
-inline Clay_String vxui_demo_shared_clay_string( const char* text )
-{
-    return ( Clay_String ) {
-        .isStaticallyAllocated = false,
-        .length = text ? ( int32_t ) std::strlen( text ) : 0,
-        .chars = text ? text : "",
-    };
-}
-
 inline constexpr vxui_demo_main_menu_preview VXUI_DEMO_MAIN_MENU_PREVIEWS[] = {
     { "sortie", "Sortie Command", "Deploy a live mission.", "Choose a mission rail and launch.", "badge.recommended" },
     { "loadout", "Loadout Deck", "Tune the frame.", "Swap frame and systems.", "badge.demo" },

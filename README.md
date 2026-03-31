@@ -286,6 +286,82 @@ vxui_menu_screen_end( &ctx, &sortie );
 
 Compact behavior is shell-owned. Authors should fill config data, not hand-tune box trees per screen.
 
+## Content Panel Primitives
+
+Three helper primitives in `vxui_menu.h` replace raw `CLAY(...)` blocks for styled content panels:
+
+### `vxui_menu_card_begin` / `vxui_menu_card_end`
+
+Styled content panel with fill, border, corner radius, padding, and child gap. Children are stacked vertically.
+
+```cpp
+const vxui_menu_card_cfg card = {
+    theme.hero_surface_fill,   // fill_color
+    theme.hero_surface_border, // border_color
+    14.0f,                     // corner_radius
+    24,                        // padding
+    12,                        // gap
+    0.0f,                      // min_height (0 = fit, >0 = grow to min)
+};
+vxui_menu_card_begin( &ctx, "screen.hero", &card );
+VXUI_LABEL( &ctx, "screen.title", title_style );
+VXUI_LABEL( &ctx, "screen.subtitle", subtitle_style );
+vxui_menu_card_end( &ctx );
+```
+
+### `vxui_menu_button`
+
+Standalone action button with explicit focus-state colors.
+
+```cpp
+const vxui_menu_button_cfg btn = {
+    .fn = my_action_fn,
+    .action_cfg = { .userdata = app },
+    .height = control_height,
+    .corner_radius = 8.0f,
+    .padding_x = 18, .padding_y = 10,
+    .font_id = FONT_BODY, .font_size = 20.0f,
+    .fill = theme.action_fill,       .fill_focus = theme.focused_row_fill,
+    .border = theme.action_border,   .border_focus = theme.focused_row_border,
+    .text = theme.action_text,       .text_focus = theme.title_text,
+};
+vxui_menu_button( &ctx, "screen.confirm", "action.confirm", &btn );
+```
+
+### `vxui_menu_stat_bar`
+
+Labeled horizontal progress bar.
+
+```cpp
+const vxui_menu_stat_bar_cfg bar = {
+    .font_id = FONT_BODY, .font_size = 18.0f,
+    .label_color = theme.muted_text,
+    .track_color = theme.stat_track,
+    .fill_color = theme.stat_fill,
+    .fill_width = 220.0f,
+};
+vxui_menu_stat_bar( &ctx, "screen.stat.speed", "Speed", ship.speed, &bar );
+```
+
+## Authoring Rule: No Direct Clay
+
+Authored demo screen composition must not use `CLAY(...)` directly. The complete allowed surface is:
+
+- `vxui_menu_*` functions
+- `VXUI( ctx, id, { .layout = {...} } )` for layout-only containers
+- `VXUI_LABEL`, `VXUI_VALUE`, `VXUI_PROMPT`
+
+Remaining Clay usage in `main.cpp` that is not authored screen composition:
+
+| Category | Location | Justification |
+|----------|----------|---------------|
+| Runtime substrate | `Clay_SetCurrentContext()` | Context lifecycle — not screen authoring |
+| Debug infrastructure | `#ifdef VXUI_DEBUG` overlay | Debug-only path |
+| Debug probes | `Clay_GetElementData()` in debug helpers | Debug-only path |
+| Theme helpers | `vxui_demo_clay_color()`, `vxui_demo_panel_border()` in `theme.h` | Only called from the debug overlay |
+
+The test `demo_layout_architecture.authored_demo_files_do_not_use_direct_clay` enforces this at build time.
+
 ## Screenshot Review Workflow
 
 The demo supports one-shot capture for deterministic visual review. Each command renders one frame, writes one PNG, and exits.
@@ -327,3 +403,13 @@ Recommended loop:
 - `vxui.h` and `vxui_menu.h` are the only public authored headers
 
 The demo and tests are the reference implementations for the current shell surface.
+
+### Renderer Architecture Notes
+
+The demo renderer in `main.cpp` uses a deliberate text batching model:
+
+- Text commands are **not** flushed per label. They accumulate in the fontcache drawlist and flush only when the clip region changes or at end of frame.
+- GPU buffers (`text_vbo`, `text_ibo`) are persistent — created once at init, resized only when needed, never destroyed mid-frame.
+- Uniform locations are resolved at init and cached in `renderer.uniforms`. No `glGetUniformLocation` calls during draw.
+- Per-pass GL state (shader, FBO, blend, viewport) is set only on pass group transitions, not on every draw call.
+- Vsync is enabled on the interactive path. The sleep-based 60 Hz cap acts as a fallback.

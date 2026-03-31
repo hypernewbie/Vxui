@@ -113,7 +113,7 @@ UTEST_F( layout_fixture, log_layout_issues_toggle_works )
 
 UTEST( layout_contracts, requires_debug_build )
 {
-    UTEST_SKIP();
+    UTEST_SKIP( "requires VXUI_DEBUG build" );
 }
 
 #endif

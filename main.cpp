@@ -68,6 +68,8 @@ enum vxui_demo_font_id
     VXUI_DEMO_FONT_UI = 0,
     VXUI_DEMO_FONT_TITLE,
     VXUI_DEMO_FONT_DEBUG,
+    VXUI_DEMO_FONT_MAIN_MENU_BODY,
+    VXUI_DEMO_FONT_MAIN_MENU_MONO,
     VXUI_DEMO_FONT_JAPANESE,
     VXUI_DEMO_FONT_ARABIC,
     VXUI_DEMO_FONT_SECTION_TITLE,
@@ -111,10 +113,10 @@ enum vxui_demo_screen_kind
 
 enum
 {
-    VXUI_DEMO_BODY_SIZE = 24,
+    VXUI_DEMO_BODY_SIZE = 16,
     VXUI_DEMO_TITLE_SIZE = 44,
-    VXUI_DEMO_SECTION_SIZE = 28,
-    VXUI_DEMO_CODE_SIZE = 16,
+    VXUI_DEMO_SECTION_SIZE = 13,
+    VXUI_DEMO_CODE_SIZE = 12,
 };
 
 static constexpr uint16_t VXUI_DEMO_BUTTON_PADDING_X = 10;
@@ -130,6 +132,7 @@ struct vxui_demo_font_metrics
 {
     ve_font_id font_id;
     float line_height;
+    float render_scale;
 };
 
 enum vxui_demo_button
@@ -218,6 +221,7 @@ typedef struct vxui_demo_glow
 {
     float padding;
     float alpha;
+    float radius;
 } vxui_demo_glow;
 
 typedef struct vxui_demo_scanline
@@ -252,6 +256,7 @@ typedef struct vxui_demo_renderer
     ve_fontcache cache;
     std::array< std::vector< uint8_t >, VXUI_DEMO_FONT_FACE_COUNT > demo_fonts;
     std::array< float, VXUI_DEMO_FONT_FACE_COUNT > demo_line_heights {};
+    std::array< float, VXUI_DEMO_FONT_FACE_COUNT > demo_font_base_sizes {};
     std::vector< std::vector< uint8_t > > backend_test_dynamic_font_buffers;
     ve_font_id backend_test_primary_font = -1;
     ve_font_id backend_test_secondary_font = -1;
@@ -483,60 +488,60 @@ struct vxui_demo_credit_entry
 };
 
 static const vxui_demo_localized_text VXUI_DEMO_COMMAND_DECK_TEXT[] = {
-    { "menu.main", "Command Deck", "コマンドデッキ", "سطح القيادة" },
-    { "menu.sortie", "Sortie", "出撃", "الطلعة" },
-    { "menu.loadout", "Loadout", "ロードアウト", "العتاد" },
-    { "menu.archives", "Archives", "アーカイブ", "الأرشيف" },
-    { "menu.records", "Records", "記録", "السجلات" },
-    { "menu.credits", "Credits", "クレジット", "الاعتمادات" },
-    { "menu.quit_demo", "Quit Demo", "デモ終了", "إنهاء العرض" },
-    { "menu.start_sortie", "Start Sortie", "出撃開始", "ابدأ الطلعة" },
-    { "menu.return_command_deck", "Return to Command Deck", "デッキへ戻る", "العودة إلى سطح القيادة" },
-    { "menu.restore_defaults", "Restore Defaults", "初期化", "استعادة الافتراضي" },
-    { "menu.interface", "Interface", "インターフェース", "الواجهة" },
-    { "menu.audio", "Audio", "オーディオ", "الصوت" },
-    { "menu.visual_fx", "Visual FX", "視覚効果", "المؤثرات" },
-    { "menu.input_prompts", "Input Prompts", "入力プロンプト", "رموز الإدخال" },
-    { "menu.challenge", "Challenge Mode", "チャレンジモード", "طور التحدي" },
-    { "menu.scanlines", "Scanlines", "走査線", "خطوط المسح" },
-    { "menu.effect_intensity", "Effect Intensity", "効果強度", "شدة التأثير" },
-    { "menu.board", "Board", "ボード", "اللوحة" },
-    { "menu.category", "Category", "カテゴリ", "الفئة" },
-    { "option.off", "Off", "オフ", "إيقاف" },
-    { "option.on", "On", "オン", "تشغيل" },
-    { "effect.low", "Low", "低", "منخفض" },
-    { "effect.medium", "Medium", "中", "متوسط" },
-    { "effect.high", "High", "高", "عال" },
+    { "menu.main", "COMMAND DECK", "コマンドデッキ", "سطح القيادة" },
+    { "menu.sortie", "SORTIE", "出撃", "الطلعة" },
+    { "menu.loadout", "LOADOUT", "ロードアウト", "العتاد" },
+    { "menu.archives", "ARCHIVES", "アーカイブ", "الأرشيف" },
+    { "menu.records", "RECORDS", "記録", "السجلات" },
+    { "menu.credits", "CREDITS", "クレジット", "الاعتمادات" },
+    { "menu.quit_demo", "QUIT DEMO", "デモ終了", "إنهاء العرض" },
+    { "menu.start_sortie", "START SORTIE", "出撃開始", "ابدأ الطلعة" },
+    { "menu.return_command_deck", "RETURN TO COMMAND DECK", "デッキへ戻る", "العودة إلى سطح القيادة" },
+    { "menu.restore_defaults", "RESTORE DEFAULTS", "初期化", "استعادة الافتراضي" },
+    { "menu.interface", "INTERFACE", "インターフェース", "الواجهة" },
+    { "menu.audio", "AUDIO", "オーディオ", "الصوت" },
+    { "menu.visual_fx", "VISUAL FX", "視覚効果", "المؤثرات" },
+    { "menu.input_prompts", "INPUT PROMPTS", "入力プロンプト", "رموز الإدخال" },
+    { "menu.challenge", "CHALLENGE MODE", "チャレンジモード", "طور التحدي" },
+    { "menu.scanlines", "SCANLINES", "走査線", "خطوط المسح" },
+    { "menu.effect_intensity", "EFFECT INTENSITY", "効果強度", "شدة التأثير" },
+    { "menu.board", "BOARD", "ボード", "اللوحة" },
+    { "menu.category", "CATEGORY", "カテゴリ", "الفئة" },
+    { "option.off", "OFF", "オフ", "إيقاف" },
+    { "option.on", "ON", "オン", "تشغيل" },
+    { "effect.low", "LOW", "低", "منخفض" },
+    { "effect.medium", "MEDIUM", "中", "متوسط" },
+    { "effect.high", "HIGH", "高", "عال" },
     { "screen.boot", "Boot", "起動", "الإقلاع" },
     { "screen.title", "Title", "タイトル", "العنوان" },
-    { "screen.sortie", "Sortie", "出撃", "الطلعة" },
-    { "screen.loadout", "Loadout", "ロードアウト", "العتاد" },
-    { "screen.archives", "Archives", "アーカイブ", "الأرشيف" },
-    { "screen.records", "Records", "記録", "السجلات" },
-    { "screen.credits", "Credits", "クレジット", "الاعتمادات" },
-    { "screen.launch_stub", "Launch", "発進", "الإطلاق" },
-    { "screen.results_stub", "Debrief", "戦果報告", "التقرير" },
-    { "boot.line.0", "VXUI Tactical Interface Uplink", "VXUI 戦術インターフェース接続", "ربط واجهة VXUI التكتيكية" },
-    { "boot.line.1", "Command Deck bus synchronizing", "コマンドデッキバス同期中", "مزامنة ناقل سطح القيادة" },
-    { "boot.line.2", "Press confirm to skip handshake", "決定でハンドシェイクをスキップ", "اضغط تأكيد لتجاوز المصافحة" },
-    { "title.subtitle", "Playable stub front-end showcase", "プレイ可能なスタブフロントエンド", "عرض لواجهة لعب تجريبية" },
-    { "title.prompt", "Press confirm to enter the deck", "決定でデッキへ", "اضغط تأكيد للدخول إلى السطح" },
-    { "title.status", "Operational Theater / Simulation Build", "作戦域 / シミュレーションビルド", "مسرح العمليات / بناء محاكاة" },
-    { "main.preview", "Focused Sector", "注目セクター", "القطاع المحدد" },
-    { "main.status_banner", "Production-shape front-end stub", "本番形状フロントエンドスタブ", "واجهة تجريبية بشكل إنتاجي" },
-    { "sortie.section.operations", "Operations", "作戦一覧", "العمليات" },
-    { "sortie.section.setup", "Launch Setup", "出撃設定", "إعداد الإطلاق" },
-    { "loadout.section.ships", "Frames", "機体", "الهياكل" },
-    { "loadout.section.weapons", "Systems", "装備", "الأنظمة" },
-    { "archives.section.entries", "Entries", "項目", "العناصر" },
-    { "records.section.runs", "Runs", "ラン", "الجولات" },
-    { "credits.section.stack", "Stack", "スタック", "المكدس" },
-    { "launch.prompt", "Proceed to debrief", "戦果報告へ", "إلى التقرير" },
-    { "results.prompt", "Confirm to return", "決定で戻る", "تأكيد للعودة" },
-    { "badge.selected", "Sel", "選択中", "محدد" },
-    { "badge.locked", "Locked", "ロック", "مغلق" },
-    { "badge.demo", "Demo", "デモ", "عرض" },
-    { "badge.recommended", "Rec", "推奨", "موصى به" },
+    { "screen.sortie", "SORTIE", "出撃", "الطلعة" },
+    { "screen.loadout", "LOADOUT", "ロードアウト", "العتاد" },
+    { "screen.archives", "ARCHIVES", "アーカイブ", "الأرشيف" },
+    { "screen.records", "RECORDS", "記録", "السجلات" },
+    { "screen.credits", "CREDITS", "クレジット", "الاعتمادات" },
+    { "screen.launch_stub", "LAUNCH", "発進", "الإطلاق" },
+    { "screen.results_stub", "DEBRIEF", "戦果報告", "التقرير" },
+    { "boot.line.0", "VXUI TACTICAL INTERFACE UPLINK", "VXUI 戦術インターフェース接続", "ربط واجهة VXUI التكتيكية" },
+    { "boot.line.1", "COMMAND DECK BUS SYNCHRONIZING", "コマンドデッキバス同期中", "مزامنة ناقل سطح القيادة" },
+    { "boot.line.2", "PRESS CONFIRM TO SKIP HANDSHAKE", "決定でハンドシェイクをスキップ", "اضغط تأكيد لتجاوز المصافحة" },
+    { "title.subtitle", "PLAYABLE STUB FRONT-END SHOWCASE", "プレイ可能なスタブフロントエンド", "عرض لواجهة لعب تجريبية" },
+    { "title.prompt", "PRESS CONFIRM TO ENTER THE DECK", "決定でデッキへ", "اضغط تأكيد للدخول إلى السطح" },
+    { "title.status", "OPERATIONAL THEATER  //  SIMULATION BUILD", "作戦域 / シミュレーションビルド", "مسرح العمليات / بناء محاكاة" },
+    { "main.preview", "FOCUSED SECTOR", "注目セクター", "القطاع المحدد" },
+    { "main.status_banner", "SYS.UPLINK.SECURE  //  FRONT-END STUB", "本番形状フロントエンドスタブ", "واجهة تجريبية بشكل إنتاجي" },
+    { "sortie.section.operations", "OPERATIONS", "作戦一覧", "العمليات" },
+    { "sortie.section.setup", "LAUNCH SETUP", "出撃設定", "إعداد الإطلاق" },
+    { "loadout.section.ships", "FRAMES", "機体", "الهياكل" },
+    { "loadout.section.weapons", "SYSTEMS", "装備", "الأنظمة" },
+    { "archives.section.entries", "ENTRIES", "項目", "العناصر" },
+    { "records.section.runs", "RUNS", "ラン", "الجولات" },
+    { "credits.section.stack", "STACK", "スタック", "المكدس" },
+    { "launch.prompt", "PROCEED TO DEBRIEF", "戦果報告へ", "إلى التقرير" },
+    { "results.prompt", "CONFIRM TO RETURN", "決定で戻る", "تأكيد للعودة" },
+    { "badge.selected", "SEL", "選択中", "محدد" },
+    { "badge.locked", "LOCKED", "ロック", "مغلق" },
+    { "badge.demo", "DEMO", "デモ", "عرض" },
+    { "badge.recommended", "REC", "推奨", "موصى به" },
 };
 
 static const vxui_demo_mission VXUI_DEMO_MISSIONS[] = {
@@ -856,18 +861,18 @@ static const char* vxui_demo_text( const char* key, void* userdata )
         if ( std::strcmp( key, "hint.controls.3" ) == 0 ) return "شغّل بناء التصحيح لتفعيل مصحح التسلسلات.";
 #endif
     } else {
-        if ( std::strcmp( key, "menu.main" ) == 0 ) return "Main Menu";
-        if ( std::strcmp( key, "menu.settings" ) == 0 ) return "Settings";
-        if ( std::strcmp( key, "menu.open_settings" ) == 0 ) return "Open Settings";
-        if ( std::strcmp( key, "menu.back" ) == 0 ) return "Back";
-        if ( std::strcmp( key, "menu.difficulty" ) == 0 ) return "Difficulty";
-        if ( std::strcmp( key, "menu.volume" ) == 0 ) return "Volume";
-        if ( std::strcmp( key, "menu.saves" ) == 0 ) return "Save Slots";
-        if ( std::strcmp( key, "menu.confirm" ) == 0 ) return "Confirm";
-        if ( std::strcmp( key, "menu.cancel" ) == 0 ) return "Cancel";
-        if ( std::strcmp( key, "menu.locale" ) == 0 ) return "Locale";
-        if ( std::strcmp( key, "menu.prompts" ) == 0 ) return "Prompt Table";
-        if ( std::strcmp( key, "menu.controls" ) == 0 ) return "Controls";
+        if ( std::strcmp( key, "menu.main" ) == 0 ) return "MAIN MENU";
+        if ( std::strcmp( key, "menu.settings" ) == 0 ) return "SETTINGS";
+        if ( std::strcmp( key, "menu.open_settings" ) == 0 ) return "OPEN SETTINGS";
+        if ( std::strcmp( key, "menu.back" ) == 0 ) return "BACK";
+        if ( std::strcmp( key, "menu.difficulty" ) == 0 ) return "DIFFICULTY";
+        if ( std::strcmp( key, "menu.volume" ) == 0 ) return "VOLUME";
+        if ( std::strcmp( key, "menu.saves" ) == 0 ) return "SAVE SLOTS";
+        if ( std::strcmp( key, "menu.confirm" ) == 0 ) return "CONFIRM";
+        if ( std::strcmp( key, "menu.cancel" ) == 0 ) return "CANCEL";
+        if ( std::strcmp( key, "menu.locale" ) == 0 ) return "LOCALE";
+        if ( std::strcmp( key, "menu.prompts" ) == 0 ) return "PROMPT TABLE";
+        if ( std::strcmp( key, "menu.controls" ) == 0 ) return "CONTROLS";
         if ( std::strcmp( key, "menu.debug" ) == 0 ) return "Debug Overlay";
         if ( std::strcmp( key, "debug.overlay.title" ) == 0 ) return "Sequence Debugger";
         if ( std::strcmp( key, "debug.label.preview" ) == 0 ) return "Preview";
@@ -882,25 +887,25 @@ static const char* vxui_demo_text( const char* key, void* userdata )
         if ( std::strcmp( key, "debug.reload.unchanged" ) == 0 ) return "No watched sequence change was detected.";
         if ( std::strcmp( key, "debug.reload.failed_prefix" ) == 0 ) return "Reload failed";
         if ( std::strcmp( key, "debug.reload.unavailable" ) == 0 ) return "Hot reload is only available in Debug builds.";
-        if ( std::strcmp( key, "difficulty.easy" ) == 0 ) return "Easy";
-        if ( std::strcmp( key, "difficulty.normal" ) == 0 ) return "Normal";
-        if ( std::strcmp( key, "difficulty.hard" ) == 0 ) return "Hard";
-        if ( std::strcmp( key, "status.label.locale" ) == 0 ) return "Locale";
-        if ( std::strcmp( key, "status.label.prompts" ) == 0 ) return "Prompts";
-        if ( std::strcmp( key, "status.label.screens" ) == 0 ) return "Screens";
+        if ( std::strcmp( key, "difficulty.easy" ) == 0 ) return "EASY";
+        if ( std::strcmp( key, "difficulty.normal" ) == 0 ) return "NORMAL";
+        if ( std::strcmp( key, "difficulty.hard" ) == 0 ) return "HARD";
+        if ( std::strcmp( key, "status.label.locale" ) == 0 ) return "LOCALE";
+        if ( std::strcmp( key, "status.label.prompts" ) == 0 ) return "PROMPTS";
+        if ( std::strcmp( key, "status.label.screens" ) == 0 ) return "SCREENS";
         if ( std::strcmp( key, "status.label.top" ) == 0 ) return "Top";
         if ( std::strcmp( key, "status.short.locale" ) == 0 ) return "Loc";
         if ( std::strcmp( key, "status.short.prompts" ) == 0 ) return "Input";
         if ( std::strcmp( key, "status.short.screens" ) == 0 ) return "Views";
         if ( std::strcmp( key, "status.short.top" ) == 0 ) return "Top";
-        if ( std::strcmp( key, "locale.name.en" ) == 0 ) return "English";
-        if ( std::strcmp( key, "locale.name.ja" ) == 0 ) return "Japanese";
-        if ( std::strcmp( key, "locale.name.ar" ) == 0 ) return "Arabic";
+        if ( std::strcmp( key, "locale.name.en" ) == 0 ) return "ENGLISH";
+        if ( std::strcmp( key, "locale.name.ja" ) == 0 ) return "JAPANESE";
+        if ( std::strcmp( key, "locale.name.ar" ) == 0 ) return "ARABIC";
         if ( std::strcmp( key, "locale.short.en" ) == 0 ) return "EN";
         if ( std::strcmp( key, "locale.short.ja" ) == 0 ) return "JA";
         if ( std::strcmp( key, "locale.short.ar" ) == 0 ) return "AR";
-        if ( std::strcmp( key, "prompt.name.keyboard" ) == 0 ) return "Keyboard";
-        if ( std::strcmp( key, "prompt.name.gamepad" ) == 0 ) return "Gamepad";
+        if ( std::strcmp( key, "prompt.name.keyboard" ) == 0 ) return "KEYBOARD";
+        if ( std::strcmp( key, "prompt.name.gamepad" ) == 0 ) return "GAMEPAD";
         if ( std::strcmp( key, "prompt.short.keyboard" ) == 0 ) return "KB";
         if ( std::strcmp( key, "prompt.short.gamepad" ) == 0 ) return "Pad";
         if ( std::strcmp( key, "screen.none" ) == 0 ) return "none";
@@ -1013,31 +1018,31 @@ static const char* vxui_demo_footer_top_name( const vxui_demo_app* app, const vx
         case VXUI_DEMO_SCREEN_SORTIE:
             if ( app && app->locale_index == VXUI_DEMO_LOCALE_JAPANESE ) return "出撃";
             if ( app && app->locale_index == VXUI_DEMO_LOCALE_ARABIC ) return "الطلعة";
-            return "Sortie";
+            return "SORTIE";
         case VXUI_DEMO_SCREEN_LOADOUT:
             if ( app && app->locale_index == VXUI_DEMO_LOCALE_JAPANESE ) return "装備";
             if ( app && app->locale_index == VXUI_DEMO_LOCALE_ARABIC ) return "العتاد";
-            return "Loadout";
+            return "LOADOUT";
         case VXUI_DEMO_SCREEN_ARCHIVES:
             if ( app && app->locale_index == VXUI_DEMO_LOCALE_JAPANESE ) return "記録庫";
             if ( app && app->locale_index == VXUI_DEMO_LOCALE_ARABIC ) return "الأرشيف";
-            return "Archives";
+            return "ARCHIVES";
         case VXUI_DEMO_SCREEN_SETTINGS:
             if ( app && app->locale_index == VXUI_DEMO_LOCALE_JAPANESE ) return "設定";
             if ( app && app->locale_index == VXUI_DEMO_LOCALE_ARABIC ) return "الإعدادات";
-            return "Settings";
+            return "SETTINGS";
         case VXUI_DEMO_SCREEN_RECORDS:
             if ( app && app->locale_index == VXUI_DEMO_LOCALE_JAPANESE ) return "記録";
             if ( app && app->locale_index == VXUI_DEMO_LOCALE_ARABIC ) return "السجلات";
-            return "Records";
+            return "RECORDS";
         case VXUI_DEMO_SCREEN_CREDITS:
             if ( app && app->locale_index == VXUI_DEMO_LOCALE_JAPANESE ) return "制作";
             if ( app && app->locale_index == VXUI_DEMO_LOCALE_ARABIC ) return "الاعتمادات";
-            return "Credits";
+            return "CREDITS";
         case VXUI_DEMO_SCREEN_TITLE:
             if ( app && app->locale_index == VXUI_DEMO_LOCALE_JAPANESE ) return "開始";
             if ( app && app->locale_index == VXUI_DEMO_LOCALE_ARABIC ) return "العنوان";
-            return "Title";
+            return "TITLE";
         case VXUI_DEMO_SCREEN_BOOT:
             if ( app && app->locale_index == VXUI_DEMO_LOCALE_JAPANESE ) return "起動";
             if ( app && app->locale_index == VXUI_DEMO_LOCALE_ARABIC ) return "التمهيد";
@@ -1130,11 +1135,20 @@ static vxui_demo_font_metrics vxui_demo_resolve_font_metrics( const vxui_demo_re
     }
 
     float line_height = requested_font_size;
+    float render_scale = 1.0f;
     if ( renderer ) {
-        line_height = vxui_demo_font_line_height( renderer, face_id, requested_font_size );
+        const size_t index = ( size_t ) face_id;
+        float base_size = requested_font_size;
+        if ( index < renderer->demo_font_base_sizes.size() && renderer->demo_font_base_sizes[ index ] > 0.0f ) {
+            base_size = renderer->demo_font_base_sizes[ index ];
+        }
+        if ( base_size > 0.0f && requested_font_size > 0.0f ) {
+            render_scale = requested_font_size / base_size;
+        }
+        line_height = vxui_demo_font_line_height( renderer, face_id, requested_font_size ) * render_scale;
     }
 
-    return { face_id, line_height };
+    return { face_id, line_height, render_scale };
 }
 
 static void vxui_demo_font_resolver( vxui_ctx* ctx, uint32_t requested_font_id, float requested_font_size, const char* locale, void* userdata, vxui_resolved_font* out )
@@ -1148,6 +1162,7 @@ static void vxui_demo_font_resolver( vxui_ctx* ctx, uint32_t requested_font_id, 
     vxui_demo_font_metrics metrics = vxui_demo_resolve_font_metrics( renderer, requested_font_id, requested_font_size, locale );
     out->font_id = metrics.font_id >= 0 ? ( uint32_t ) metrics.font_id : requested_font_id;
     out->line_height = metrics.line_height;
+    out->render_scale = metrics.render_scale;
 }
 
 static float vxui_demo_control_height( const vxui_demo_renderer* renderer, const char* locale )
@@ -2788,8 +2803,10 @@ static bool vxui_demo_load_fonts( vxui_demo_renderer* renderer )
     const std::filesystem::path source_dir = std::filesystem::path( VXUI_SOURCE_DIR );
     const font_load fonts[] = {
         { "vefc/demo/fonts/OpenSans-Regular.ttf", VXUI_DEMO_FONT_UI, ( float ) VXUI_DEMO_BODY_SIZE },
-        { "vefc/demo/fonts/Bitter-Regular.ttf", VXUI_DEMO_FONT_TITLE, ( float ) VXUI_DEMO_TITLE_SIZE },
+        { "demo/fonts/Rajdhani-SemiBold.ttf", VXUI_DEMO_FONT_TITLE, ( float ) VXUI_DEMO_TITLE_SIZE },
         { "vefc/demo/fonts/NovaMono-Regular.ttf", VXUI_DEMO_FONT_DEBUG, ( float ) VXUI_DEMO_CODE_SIZE },
+        { "demo/fonts/SpaceGrotesk-Variable.ttf", VXUI_DEMO_FONT_MAIN_MENU_BODY, ( float ) VXUI_DEMO_BODY_SIZE },
+        { "demo/fonts/RobotoMono-Variable.ttf", VXUI_DEMO_FONT_MAIN_MENU_MONO, ( float ) VXUI_DEMO_CODE_SIZE },
         { "vefc/demo/fonts/NotoSansJP-Regular.otf", VXUI_DEMO_FONT_JAPANESE, ( float ) VXUI_DEMO_BODY_SIZE },
         { "vefc/demo/fonts/Tajawal-Regular.ttf", VXUI_DEMO_FONT_ARABIC, ( float ) VXUI_DEMO_BODY_SIZE },
         { "vefc/demo/fonts/Bitter-Regular.ttf", VXUI_DEMO_FONT_SECTION_TITLE, ( float ) VXUI_DEMO_SECTION_SIZE },
@@ -2807,6 +2824,7 @@ static bool vxui_demo_load_fonts( vxui_demo_renderer* renderer )
             std::fprintf( stderr, "Failed to load demo font '%s' with the expected id %d (got %lld).\n", full_path.string().c_str(), font.font_id, ( long long ) id );
             return false;
         }
+        renderer->demo_font_base_sizes[ font.font_id ] = font.size_px;
         renderer->demo_line_heights[ font.font_id ] = vxui_demo_font_line_height( renderer, id, font.size_px );
     }
     return true;
@@ -3049,8 +3067,8 @@ static void vxui_demo_render_text_cmd( vxui_demo_renderer* renderer, const vxui_
         vxui_demo_to_u8( text->text ),
         posx,
         posy,
-        1.0f / ( float ) renderer->window_size.width,
-        1.0f / ( float ) renderer->window_size.height,
+        text->render_scale / ( float ) renderer->window_size.width,
+        text->render_scale / ( float ) renderer->window_size.height,
         true );
 
     char event_label[ 64 ];
@@ -4130,12 +4148,6 @@ static const vxui_demo_main_menu_preview* vxui_demo_current_main_menu_preview( c
     return vxui_demo_main_menu_preview_from_focused_row( app ? app->main_menu_state.last_focused_row_id : 0u );
 }
 
-static vxui_menu_style vxui_demo_menu_style_title_deck( void )
-{
-    vxui_menu_style style = vxui_demo_make_title_deck_menu_style( VXUI_DEMO_FONT_ROLE_BODY, VXUI_DEMO_FONT_ROLE_TITLE );
-    return style;
-}
-
 static vxui_menu_style vxui_demo_menu_style_form_deck( float label_lane_width )
 {
     vxui_menu_style style = vxui_menu_style_form();
@@ -4451,8 +4463,9 @@ static void vxui_demo_render_boot_screen( vxui_demo_app* app, vxui_ctx* ctx )
         surface_metrics.surface_width,
         surface_max_height,
         theme.app_background_base,
-        theme.primary_panel_fill,
-        theme.primary_panel_border );
+        theme.app_background_base,
+        { 0, 0, 0, 0 } );
+    vxui_demo_make_surface_cfg_transparent( surface_cfg );
     vxui_menu_surface_begin( ctx, "boot", "boot.surface", &surface_cfg );
     {
         const std::string screen_count_text = std::to_string( ctx ? ctx->screen_count : 0 );
@@ -4468,8 +4481,8 @@ static void vxui_demo_render_boot_screen( vxui_demo_app* app, vxui_ctx* ctx )
         vxui_menu_footer_cfg footer_cfg = {
             footer_prompts,
             ( int ) ( sizeof( footer_prompts ) / sizeof( footer_prompts[ 0 ] ) ),
-            footer_status,
-            ( int ) ( sizeof( footer_status ) / sizeof( footer_status[ 0 ] ) ),
+            nullptr,
+            0,
             VXUI_MENU_SHELL_COMPACT_AUTO,
             surface_max_height <= 680.0f ? 3 : 4,
             false,
@@ -4511,9 +4524,9 @@ static void vxui_demo_render_boot_screen( vxui_demo_app* app, vxui_ctx* ctx )
                 VXUI_DEMO_FONT_ROLE_BODY, 18.0f,
                 theme.muted_text, theme.stat_track, theme.stat_fill, 220.0f,
             };
-            vxui_menu_stat_bar( ctx, "boot.bar.sync", "Link Sync", 0.92f, &stat_cfg );
-            vxui_menu_stat_bar( ctx, "boot.bar.safety", "Safety Envelope", 0.78f, &stat_cfg );
-            vxui_menu_stat_bar( ctx, "boot.bar.radar", "Radar Uplink", 0.84f, &stat_cfg );
+            vxui_menu_stat_bar( ctx, "boot.bar.sync", "LINK SYNC", 0.92f, &stat_cfg );
+            vxui_menu_stat_bar( ctx, "boot.bar.safety", "SAFETY ENVELOPE", 0.78f, &stat_cfg );
+            vxui_menu_stat_bar( ctx, "boot.bar.radar", "RADAR UPLINK", 0.84f, &stat_cfg );
         }
         vxui_menu_footer( ctx, "boot.footer", &screen_cfg.footer );
         vxui_menu_screen_end( ctx, &shell_state );
@@ -4537,8 +4550,9 @@ static void vxui_demo_render_title_screen( vxui_demo_app* app, vxui_ctx* ctx, co
         surface_metrics.surface_width,
         surface_max_height,
         theme.app_background_base,
-        theme.primary_panel_fill,
-        theme.primary_panel_border );
+        theme.app_background_base,
+        { 0, 0, 0, 0 } );
+    vxui_demo_make_surface_cfg_transparent( surface_cfg );
     vxui_menu_surface_begin( ctx, "title", "title.surface", &surface_cfg );
     {
         const std::string screen_count_text = std::to_string( ctx ? ctx->screen_count : 0 );
@@ -4551,8 +4565,8 @@ static void vxui_demo_render_title_screen( vxui_demo_app* app, vxui_ctx* ctx, co
         vxui_menu_footer_cfg footer_cfg = {
             nullptr,
             0,
-            footer_status,
-            ( int ) ( sizeof( footer_status ) / sizeof( footer_status[ 0 ] ) ),
+            nullptr,
+            0,
             VXUI_MENU_SHELL_COMPACT_AUTO,
             surface_max_height <= 680.0f ? 3 : 4,
             false,
@@ -4575,41 +4589,36 @@ static void vxui_demo_render_title_screen( vxui_demo_app* app, vxui_ctx* ctx, co
         vxui_menu_state shell_state = {};
 
         vxui_menu_screen_begin( ctx, &shell_state, "title.shell", &screen_cfg );
-        VXUI( ctx, "title.hero", {
-            .layout = {
-                .sizing = { CLAY_SIZING_GROW( 0 ), CLAY_SIZING_FIT( 0 ) },
-                .padding = CLAY_PADDING_ALL( 24 ),
-                .childGap = 12,
-                .layoutDirection = CLAY_TOP_TO_BOTTOM,
-            },
-            .backgroundColor = vxui_demo_clay_color( theme.hero_surface_fill ),
-            .cornerRadius = CLAY_CORNER_RADIUS( 14 ),
-            .border = vxui_demo_panel_border( theme.hero_surface_border, 1 ),
-        } ) {
-            VXUI_LABEL( ctx, "menu.main", ( vxui_label_cfg ) {
-                .font_id = VXUI_DEMO_FONT_ROLE_TITLE,
-                .font_size = 56.0f,
-                .color = theme.title_text,
-            } );
+        {
+            const vxui_menu_card_cfg hero_cfg = {
+                { 0, 0, 0, 0 }, { 0, 0, 0, 0 }, 14.0f, 24, 12, 0.0f,
+            };
+            vxui_menu_card_begin( ctx, "title.hero", &hero_cfg );
             {
-                vxui_demo_decl_scope title_lockup_decl( ctx, vxui_id( "menu.main" ) );
-                VXUI_TRAIT( VXUI_TRAIT_GLOW, ( vxui_demo_glow ) { .padding = 10.0f, .alpha = 0.18f } );
+                VXUI_LABEL( ctx, "menu.main", ( vxui_label_cfg ) {
+                    .font_id = VXUI_DEMO_FONT_ROLE_TITLE,
+                    .font_size = 56.0f,
+                    .color = theme.title_text,
+                } );
+                VXUI_LABEL( ctx, "title.subtitle", ( vxui_label_cfg ) {
+                    .font_id = VXUI_DEMO_FONT_ROLE_SECTION,
+                    .font_size = 22.0f,
+                    .color = theme.accent_cool,
+                } );
+                VXUI_LABEL( ctx, "title.status", ( vxui_label_cfg ) {
+                    .font_id = VXUI_DEMO_FONT_ROLE_BODY,
+                    .font_size = 16.0f,
+                    .color = theme.muted_text,
+                } );
             }
-            VXUI_LABEL( ctx, "title.subtitle", ( vxui_label_cfg ) {
-                .font_id = VXUI_DEMO_FONT_ROLE_SECTION,
-                .font_size = 28.0f,
-                .color = theme.accent_cool,
-            } );
-            VXUI_LABEL( ctx, "title.status", ( vxui_label_cfg ) {
-                .font_id = VXUI_DEMO_FONT_ROLE_BODY,
-                .font_size = 20.0f,
-                .color = theme.muted_text,
-            } );
+            vxui_menu_card_end( ctx );
         }
-
+        VXUI( ctx, "title.spacer", {
+            .layout = { .sizing = { CLAY_SIZING_GROW( 0 ), CLAY_SIZING_GROW( 0 ) } },
+        } ) {}
         {
             const vxui_menu_card_cfg card_cfg = {
-                theme.utility_fill, theme.utility_border, 12.0f, 18, 12, 0.0f,
+                { 0, 0, 0, 0 }, { 0, 0, 0, 0 }, 12.0f, 18, 12, 0.0f,
             };
             vxui_menu_card_begin( ctx, "title.action_band", &card_cfg );
             {
@@ -4625,7 +4634,7 @@ static void vxui_demo_render_title_screen( vxui_demo_app* app, vxui_ctx* ctx, co
                 vxui_menu_button( ctx, "title.enter", "title.prompt", &btn_cfg );
                 {
                     vxui_demo_decl_scope title_enter_decl( ctx, vxui_id( "title.enter" ) );
-                    VXUI_TRAIT( VXUI_TRAIT_GLOW, ( vxui_demo_glow ) { .padding = 6.0f, .alpha = 0.18f } );
+                    VXUI_TRAIT( VXUI_TRAIT_GLOW, ( vxui_demo_glow ) { .padding = 8.0f, .alpha = 0.12f, .radius = 12.0f } );
                 }
             }
             vxui_menu_card_end( ctx );
@@ -4648,18 +4657,20 @@ static void vxui_demo_render_main_menu_screen( vxui_demo_app* app, vxui_ctx* ctx
         ? std::min( surface_max_height, app->shot_layout_surface_max_height_override )
         : surface_max_height;
     const vxui_demo_main_menu_layout_spec layout = vxui_demo_resolve_main_menu_layout( viewport_width, layout_surface_max_height, ctx->locale );
-    vxui_menu_style menu_style = vxui_demo_menu_style_title_deck();
-    if ( layout.surface_max_height <= 650.0f ) {
-        menu_style.body_font_size = 14.0f;
-        menu_style.secondary_font_size = 12.0f;
-        menu_style.badge_font_size = 8.0f;
-        menu_style.row_height = 25.0f;
-        menu_style.row_gap = 0.0f;
-        menu_style.section_gap = 2.0f;
-        menu_style.padding_y = 3.0f;
-    }
-    vxui_menu_style command_menu_style = menu_style;
-    command_menu_style.panel_fill_color = { 0, 0, 0, 1 };
+    const uint32_t focused_row_id =
+        vxui_demo_try_main_menu_preview_from_focused_row( ctx ? ctx->focused_id : 0u ) ? ctx->focused_id : app->main_menu_state.last_focused_row_id;
+    app->main_menu_state.last_focused_row_id = focused_row_id;
+    const vxui_demo_main_menu_type_scale main_menu_scale = vxui_demo_get_main_menu_type_scale( layout );
+    const bool localized_main_menu =
+        vxui_demo_locale_matches( ctx->locale, "ja" ) || vxui_demo_locale_matches( ctx->locale, "ar" );
+    const uint32_t main_menu_body_font = localized_main_menu ? ( uint32_t ) VXUI_DEMO_FONT_ROLE_BODY : ( uint32_t ) VXUI_DEMO_FONT_MAIN_MENU_BODY;
+    const uint32_t main_menu_title_font = localized_main_menu ? ( uint32_t ) VXUI_DEMO_FONT_ROLE_TITLE : ( uint32_t ) VXUI_DEMO_FONT_TITLE;
+    const uint32_t main_menu_mono_font = localized_main_menu ? ( uint32_t ) VXUI_DEMO_FONT_ROLE_CODE : ( uint32_t ) VXUI_DEMO_FONT_MAIN_MENU_MONO;
+    const float command_font_size = main_menu_scale.command_label_size;
+    const float command_badge_font_size = main_menu_scale.command_badge_size;
+    const float command_row_height = main_menu_scale.command_row_height;
+    const uint16_t command_row_gap = main_menu_scale.command_row_gap;
+    const uint16_t command_panel_gap = main_menu_scale.command_panel_gap;
 
     if ( background_scanline ) {
         vxui_demo_emit_surface_scanline( ctx, "main_menu" );
@@ -4668,20 +4679,22 @@ static void vxui_demo_render_main_menu_screen( vxui_demo_app* app, vxui_ctx* ctx
         layout.surface.surface_width,
         layout.surface_max_height,
         theme.app_background_base,
-        theme.primary_panel_fill,
-        theme.primary_panel_border );
+        theme.app_background_base,
+        { 0, 0, 0, 0 } );
+    vxui_demo_make_surface_cfg_transparent( surface_cfg );
     vxui_menu_surface_begin( ctx, "main_menu", "main.surface", &surface_cfg );
     {
-        const vxui_demo_main_menu_preview* preview = vxui_demo_current_main_menu_preview( app );
+        const vxui_demo_main_menu_preview* preview =
+            vxui_demo_try_main_menu_preview_from_focused_row( focused_row_id ) ? vxui_demo_try_main_menu_preview_from_focused_row( focused_row_id ) : vxui_demo_current_main_menu_preview( app );
         vxui_demo_emit_main_menu_shell(
             ctx,
             rtl,
             ctx->locale,
             layout,
             ( vxui_demo_main_menu_visuals ) {
-                VXUI_DEMO_FONT_ROLE_BODY,
-                VXUI_DEMO_FONT_ROLE_TITLE,
-                VXUI_DEMO_FONT_ROLE_SECTION,
+                main_menu_body_font,
+                main_menu_title_font,
+                main_menu_mono_font,
             },
             ( vxui_demo_main_menu_shell_copy ) {
                 "menu.main",
@@ -4700,32 +4713,36 @@ static void vxui_demo_render_main_menu_screen( vxui_demo_app* app, vxui_ctx* ctx
             },
             *preview,
             [&]( float viewport_height ) {
-                vxui_menu_begin( ctx, &app->main_menu_state, "main.command_menu", ( vxui_menu_cfg ) {
-                    .style = &command_menu_style,
-                    .viewport_height = viewport_height,
-                } );
-                vxui_menu_action( ctx, &app->main_menu_state, "sortie", "menu.sortie", vxui_demo_open_sortie, ( vxui_menu_row_cfg ) {
-                    .badge_text_key = "badge.recommended",
-                }, ( vxui_action_cfg ) { .userdata = app } );
-                vxui_menu_action( ctx, &app->main_menu_state, "loadout", "menu.loadout", vxui_demo_open_loadout, ( vxui_menu_row_cfg ) {
-                    .badge_text_key = "badge.demo",
-                }, ( vxui_action_cfg ) { .userdata = app } );
-                vxui_menu_action( ctx, &app->main_menu_state, "archives", "menu.archives", vxui_demo_open_archives, ( vxui_menu_row_cfg ) {
-                    .badge_text_key = "badge.demo",
-                }, ( vxui_action_cfg ) { .userdata = app } );
-                vxui_menu_action( ctx, &app->main_menu_state, "settings", "menu.settings", vxui_demo_open_settings, ( vxui_menu_row_cfg ) {
-                    .badge_text_key = "badge.recommended",
-                }, ( vxui_action_cfg ) { .userdata = app } );
-                vxui_menu_action( ctx, &app->main_menu_state, "records", "menu.records", vxui_demo_open_records, ( vxui_menu_row_cfg ) {
-                    .badge_text_key = "badge.demo",
-                }, ( vxui_action_cfg ) { .userdata = app } );
-                vxui_menu_action( ctx, &app->main_menu_state, "credits", "menu.credits", vxui_demo_open_credits, ( vxui_menu_row_cfg ) {
-                    .badge_text_key = "badge.demo",
-                }, ( vxui_action_cfg ) { .userdata = app } );
-                vxui_menu_action( ctx, &app->main_menu_state, "quit", "menu.quit_demo", vxui_demo_request_quit, ( vxui_menu_row_cfg ) { 0 }, ( vxui_action_cfg ) {
-                    .userdata = app,
-                } );
-                vxui_menu_end( ctx, &app->main_menu_state );
+                VXUI( ctx, "main.command_menu", {
+                    .layout = {
+                        .sizing = { CLAY_SIZING_GROW( 0 ), CLAY_SIZING_FIXED( viewport_height ) },
+                        .padding = { 2, 0, 0, 4 },
+                        .childGap = command_panel_gap,
+                        .layoutDirection = CLAY_TOP_TO_BOTTOM,
+                    },
+                } ) {
+                    VXUI( ctx, "main.command_menu.rows", {
+                        .layout = {
+                            .sizing = { CLAY_SIZING_GROW( 0 ), CLAY_SIZING_FIT( 0 ) },
+                            .childGap = command_row_gap,
+                            .layoutDirection = CLAY_TOP_TO_BOTTOM,
+                        },
+                    } ) {
+                        vxui_demo_emit_main_menu_command_row( ctx, "sortie", "menu.sortie", "badge.recommended", vxui_demo_open_sortie, ( vxui_action_cfg ) { .userdata = app }, main_menu_title_font, main_menu_mono_font, command_font_size, command_badge_font_size, command_row_height, theme );
+                        vxui_demo_emit_main_menu_command_row( ctx, "loadout", "menu.loadout", "badge.demo", vxui_demo_open_loadout, ( vxui_action_cfg ) { .userdata = app }, main_menu_title_font, main_menu_mono_font, command_font_size, command_badge_font_size, command_row_height, theme );
+                        vxui_demo_emit_main_menu_command_row( ctx, "archives", "menu.archives", "badge.demo", vxui_demo_open_archives, ( vxui_action_cfg ) { .userdata = app }, main_menu_title_font, main_menu_mono_font, command_font_size, command_badge_font_size, command_row_height, theme );
+                        vxui_demo_emit_main_menu_command_row( ctx, "settings", "menu.settings", "badge.recommended", vxui_demo_open_settings, ( vxui_action_cfg ) { .userdata = app }, main_menu_title_font, main_menu_mono_font, command_font_size, command_badge_font_size, command_row_height, theme );
+                        vxui_demo_emit_main_menu_command_row( ctx, "records", "menu.records", "badge.demo", vxui_demo_open_records, ( vxui_action_cfg ) { .userdata = app }, main_menu_title_font, main_menu_mono_font, command_font_size, command_badge_font_size, command_row_height, theme );
+                        vxui_demo_emit_main_menu_command_row( ctx, "credits", "menu.credits", "badge.demo", vxui_demo_open_credits, ( vxui_action_cfg ) { .userdata = app }, main_menu_title_font, main_menu_mono_font, command_font_size, command_badge_font_size, command_row_height, theme );
+                        vxui_demo_emit_main_menu_command_row( ctx, "quit", "menu.quit_demo", nullptr, vxui_demo_request_quit, ( vxui_action_cfg ) { .userdata = app }, main_menu_title_font, main_menu_mono_font, command_font_size, command_badge_font_size, command_row_height, theme );
+                    }
+
+                    VXUI( ctx, "main.command_menu.spacer", {
+                        .layout = {
+                            .sizing = { CLAY_SIZING_GROW( 0 ), CLAY_SIZING_GROW( 0 ) },
+                        },
+                    } ) {}
+                }
             } );
     }
     vxui_menu_surface_end( ctx );
@@ -4834,8 +4851,9 @@ static void vxui_demo_render_settings_screen( vxui_demo_app* app, vxui_ctx* ctx,
         surface_metrics.surface_width,
         layout.surface_max_height,
         theme.app_background_base,
-        theme.primary_panel_fill,
-        theme.primary_panel_border );
+        theme.app_background_base,
+        { 0, 0, 0, 0 } );
+    vxui_demo_make_surface_cfg_transparent( surface_cfg );
     vxui_menu_surface_begin( ctx, "settings", "settings.surface", &surface_cfg );
     {
         const std::string settings_screen_count = std::to_string( ctx ? ctx->screen_count : 0 );
@@ -4852,8 +4870,8 @@ static void vxui_demo_render_settings_screen( vxui_demo_app* app, vxui_ctx* ctx,
         vxui_menu_footer_cfg footer_cfg = {
             footer_prompts,
             ( int ) ( sizeof( footer_prompts ) / sizeof( footer_prompts[ 0 ] ) ),
-            footer_status,
-            ( int ) ( sizeof( footer_status ) / sizeof( footer_status[ 0 ] ) ),
+            nullptr,
+            0,
             VXUI_MENU_SHELL_COMPACT_AUTO,
             layout.surface_max_height <= 680.0f ? 3 : 4,
             false,
@@ -4895,7 +4913,7 @@ static void vxui_demo_render_settings_screen( vxui_demo_app* app, vxui_ctx* ctx,
             vxui_menu_option( ctx, &app->settings_menu_state, "effect_intensity", "menu.effect_intensity", &app->effect_intensity_index, const_cast< const char** >( VXUI_DEMO_EFFECT_KEYS ), 3, ( vxui_menu_row_cfg ) { 0 }, ( vxui_option_cfg ) { 0 } );
             vxui_menu_section( ctx, &app->settings_menu_state, "input_prompts", "menu.input_prompts", ( vxui_menu_section_cfg ) { 0 } );
             vxui_menu_option( ctx, &app->settings_menu_state, "prompt_table", "menu.prompts", &app->prompt_table_index, const_cast< const char** >( VXUI_DEMO_PROMPT_TABLE_KEYS ), 2, ( vxui_menu_row_cfg ) {
-                .secondary_key = "Hotkeys still work globally.",
+                .secondary_key = "HOTKEYS STILL WORK GLOBALLY.",
             }, ( vxui_option_cfg ) {
                 .on_change = vxui_demo_prompt_table_changed,
                 .userdata = app,
@@ -4959,8 +4977,9 @@ static void vxui_demo_render_credits_screen( vxui_demo_app* app, vxui_ctx* ctx, 
         surface_metrics.surface_width,
         surface_max_height,
         theme.app_background_base,
-        theme.primary_panel_fill,
-        theme.primary_panel_border );
+        theme.app_background_base,
+        { 0, 0, 0, 0 } );
+    vxui_demo_make_surface_cfg_transparent( surface_cfg );
     vxui_menu_surface_begin( ctx, "credits", "credits.surface", &surface_cfg );
     {
         const std::string screen_count_text = std::to_string( ctx ? ctx->screen_count : 0 );
@@ -4973,8 +4992,8 @@ static void vxui_demo_render_credits_screen( vxui_demo_app* app, vxui_ctx* ctx, 
         vxui_menu_footer_cfg footer_cfg = {
             nullptr,
             0,
-            footer_status,
-            ( int ) ( sizeof( footer_status ) / sizeof( footer_status[ 0 ] ) ),
+            nullptr,
+            0,
             VXUI_MENU_SHELL_COMPACT_AUTO,
             surface_max_height <= 680.0f ? 3 : 4,
             false,
@@ -4997,32 +5016,26 @@ static void vxui_demo_render_credits_screen( vxui_demo_app* app, vxui_ctx* ctx, 
         vxui_menu_state shell_state = {};
 
         vxui_menu_screen_begin( ctx, &shell_state, "credits.shell", &screen_cfg );
-        VXUI( ctx, "credits.header", {
-            .layout = {
-                .sizing = { CLAY_SIZING_GROW( 0 ), CLAY_SIZING_FIT( 0 ) },
-                .padding = CLAY_PADDING_ALL( 18 ),
-            },
-            .backgroundColor = vxui_demo_clay_color( theme.hero_surface_fill ),
-            .cornerRadius = CLAY_CORNER_RADIUS( 14 ),
-            .border = vxui_demo_panel_border( theme.hero_surface_border, 1 ),
-        } ) {
-            VXUI_LABEL( ctx, "menu.credits", vxui_demo_text_style( VXUI_DEMO_FONT_ROLE_TITLE, 46.0f, theme.title_text ) );
+        {
+            const vxui_menu_card_cfg hdr_cfg = {
+                { 0, 0, 0, 0 }, { 0, 0, 0, 0 }, 14.0f, 18, 0, 0.0f,
+            };
+            vxui_menu_card_begin( ctx, "credits.header", &hdr_cfg );
+            {
+                VXUI_LABEL( ctx, "menu.credits", vxui_demo_text_style( VXUI_DEMO_FONT_ROLE_TITLE, 46.0f, theme.title_text ) );
+            }
+            vxui_menu_card_end( ctx );
         }
 
-        VXUI( ctx, "credits.stack", {
-            .layout = {
-                .sizing = { CLAY_SIZING_GROW( 0 ), CLAY_SIZING_GROW( 160.0f ) },
-                .padding = CLAY_PADDING_ALL( 20 ),
-                .childGap = 12,
-                .layoutDirection = CLAY_TOP_TO_BOTTOM,
-            },
-            .backgroundColor = vxui_demo_clay_color( theme.secondary_panel_fill ),
-            .cornerRadius = CLAY_CORNER_RADIUS( 12 ),
-            .border = vxui_demo_panel_border( theme.secondary_panel_border, 1 ),
-        } ) {
+        {
+        const vxui_menu_card_cfg stack_cfg = {
+            { 0, 0, 0, 0 }, { 0, 0, 0, 0 }, 12.0f, 20, 12, 160.0f,
+        };
+        vxui_menu_card_begin( ctx, "credits.stack", &stack_cfg );
+        {
             VXUI_LABEL( ctx, "credits.section.stack", ( vxui_label_cfg ) {
                 .font_id = VXUI_DEMO_FONT_ROLE_SECTION,
-                .font_size = 24.0f,
+                .font_size = 20.0f,
                 .color = theme.section_text,
             } );
             VXUI( ctx, "credits.body_viewport", {
@@ -5046,27 +5059,29 @@ static void vxui_demo_render_credits_screen( vxui_demo_app* app, vxui_ctx* ctx, 
                     for ( const vxui_demo_credit_entry& credit : VXUI_DEMO_CREDITS ) {
                         VXUI_LABEL( ctx, credit.role, ( vxui_label_cfg ) {
                             .font_id = VXUI_DEMO_FONT_ROLE_SECTION,
-                            .font_size = 22.0f,
+                            .font_size = 16.0f,
                             .color = theme.accent_cool,
                         } );
                         VXUI_LABEL( ctx, credit.name, ( vxui_label_cfg ) {
                             .font_id = VXUI_DEMO_FONT_ROLE_BODY,
-                            .font_size = 24.0f,
+                            .font_size = 18.0f,
                             .color = theme.title_text,
                         } );
                         VXUI_LABEL( ctx, credit.detail, ( vxui_label_cfg ) {
                             .font_id = VXUI_DEMO_FONT_ROLE_BODY,
-                            .font_size = 18.0f,
+                            .font_size = 14.0f,
                             .color = theme.muted_text,
                         } );
                     }
                 }
             }
         }
+        vxui_menu_card_end( ctx );
+        }
 
         {
             const vxui_menu_card_cfg card_cfg = {
-                theme.utility_fill, theme.utility_border, 12.0f, 18, 12, 0.0f,
+                { 0, 0, 0, 0 }, { 0, 0, 0, 0 }, 12.0f, 18, 12, 0.0f,
             };
             vxui_menu_card_begin( ctx, "credits.actions", &card_cfg );
             {
@@ -5106,8 +5121,9 @@ static void vxui_demo_render_launch_stub_screen( vxui_demo_app* app, vxui_ctx* c
         surface_metrics.surface_width,
         surface_max_height,
         theme.app_background_base,
-        theme.primary_panel_fill,
-        theme.primary_panel_border );
+        theme.app_background_base,
+        { 0, 0, 0, 0 } );
+    vxui_demo_make_surface_cfg_transparent( surface_cfg );
     vxui_menu_surface_begin( ctx, "launch_stub", "launch_stub.surface", &surface_cfg );
     {
         const std::string screen_count_text = std::to_string( ctx ? ctx->screen_count : 0 );
@@ -5123,8 +5139,8 @@ static void vxui_demo_render_launch_stub_screen( vxui_demo_app* app, vxui_ctx* c
         vxui_menu_footer_cfg footer_cfg = {
             footer_prompts,
             ( int ) ( sizeof( footer_prompts ) / sizeof( footer_prompts[ 0 ] ) ),
-            footer_status,
-            ( int ) ( sizeof( footer_status ) / sizeof( footer_status[ 0 ] ) ),
+            nullptr,
+            0,
             VXUI_MENU_SHELL_COMPACT_AUTO,
             surface_max_height <= 680.0f ? 3 : 4,
             false,
@@ -5147,28 +5163,28 @@ static void vxui_demo_render_launch_stub_screen( vxui_demo_app* app, vxui_ctx* c
         vxui_menu_state shell_state = {};
 
         vxui_menu_screen_begin( ctx, &shell_state, "launch_stub.shell", &screen_cfg );
-        VXUI( ctx, "launch_stub.header", {
-            .layout = {
-                .sizing = { CLAY_SIZING_GROW( 0 ), CLAY_SIZING_FIT( 0 ) },
-                .padding = CLAY_PADDING_ALL( 18 ),
-                .childGap = 8,
-                .layoutDirection = CLAY_TOP_TO_BOTTOM,
-            },
-            .backgroundColor = vxui_demo_clay_color( theme.hero_surface_fill ),
-            .cornerRadius = CLAY_CORNER_RADIUS( 14 ),
-            .border = vxui_demo_panel_border( theme.hero_surface_border, 1 ),
-        } ) {
-            VXUI_LABEL( ctx, "screen.launch_stub", vxui_demo_text_style( VXUI_DEMO_FONT_ROLE_TITLE, 46.0f, theme.title_text ) );
-            VXUI_LABEL( ctx, mission.name, vxui_demo_text_style( VXUI_DEMO_FONT_ROLE_SECTION, 24.0f, theme.accent_cool ) );
+        {
+            const vxui_menu_card_cfg hdr_cfg = {
+                { 0, 0, 0, 0 }, { 0, 0, 0, 0 }, 14.0f, 18, 8, 0.0f,
+            };
+            vxui_menu_card_begin( ctx, "launch_stub.header", &hdr_cfg );
+            {
+                VXUI_LABEL( ctx, "screen.launch_stub", vxui_demo_text_style( VXUI_DEMO_FONT_ROLE_TITLE, 46.0f, theme.title_text ) );
+                VXUI_LABEL( ctx, mission.name, vxui_demo_text_style( VXUI_DEMO_FONT_ROLE_SECTION, 24.0f, theme.accent_cool ) );
+            }
+            vxui_menu_card_end( ctx );
         }
-        VXUI_LABEL( ctx, "Launch path is a stub front-end handoff; no gameplay runtime exists in this sample.", vxui_demo_text_style( VXUI_DEMO_FONT_ROLE_BODY, 20.0f, theme.body_text ) );
+        VXUI_LABEL( ctx, "Launch path is a stub front-end handoff; no gameplay runtime exists in this sample.", vxui_demo_text_style( VXUI_DEMO_FONT_ROLE_BODY, 16.0f, theme.body_text ) );
         {
             const vxui_menu_stat_bar_cfg stat_cfg = {
                 VXUI_DEMO_FONT_ROLE_BODY, 18.0f,
                 theme.muted_text, theme.stat_track, theme.stat_fill, 220.0f,
             };
-            vxui_menu_stat_bar( ctx, "launch_stub.progress", "Launch Sync", progress, &stat_cfg );
+            vxui_menu_stat_bar( ctx, "launch_stub.progress", "LAUNCH SYNC", progress, &stat_cfg );
         }
+        VXUI( ctx, "launch_stub.spacer", {
+            .layout = { .sizing = { CLAY_SIZING_GROW( 0 ), CLAY_SIZING_GROW( 0 ) } },
+        } ) {}
         vxui_menu_footer( ctx, "launch_stub.footer", &screen_cfg.footer );
         vxui_menu_screen_end( ctx, &shell_state );
     }
@@ -5192,8 +5208,9 @@ static void vxui_demo_render_results_stub_screen( vxui_demo_app* app, vxui_ctx* 
         surface_metrics.surface_width,
         surface_max_height,
         theme.app_background_base,
-        theme.primary_panel_fill,
-        theme.primary_panel_border );
+        theme.app_background_base,
+        { 0, 0, 0, 0 } );
+    vxui_demo_make_surface_cfg_transparent( surface_cfg );
     vxui_menu_surface_begin( ctx, "results_stub", "results_stub.surface", &surface_cfg );
     {
         const std::string screen_count_text = std::to_string( ctx ? ctx->screen_count : 0 );
@@ -5209,8 +5226,8 @@ static void vxui_demo_render_results_stub_screen( vxui_demo_app* app, vxui_ctx* 
         vxui_menu_footer_cfg footer_cfg = {
             footer_prompts,
             ( int ) ( sizeof( footer_prompts ) / sizeof( footer_prompts[ 0 ] ) ),
-            footer_status,
-            ( int ) ( sizeof( footer_status ) / sizeof( footer_status[ 0 ] ) ),
+            nullptr,
+            0,
             VXUI_MENU_SHELL_COMPACT_AUTO,
             surface_max_height <= 680.0f ? 3 : 4,
             false,
@@ -5233,25 +5250,22 @@ static void vxui_demo_render_results_stub_screen( vxui_demo_app* app, vxui_ctx* 
         vxui_menu_state shell_state = {};
 
         vxui_menu_screen_begin( ctx, &shell_state, "results_stub.shell", &screen_cfg );
-        VXUI( ctx, "results_stub.header", {
-            .layout = {
-                .sizing = { CLAY_SIZING_GROW( 0 ), CLAY_SIZING_FIT( 0 ) },
-                .padding = CLAY_PADDING_ALL( 18 ),
-                .childGap = 8,
-                .layoutDirection = CLAY_TOP_TO_BOTTOM,
-            },
-            .backgroundColor = vxui_demo_clay_color( theme.hero_surface_fill ),
-            .cornerRadius = CLAY_CORNER_RADIUS( 14 ),
-            .border = vxui_demo_panel_border( theme.hero_surface_border, 1 ),
-        } ) {
-            VXUI_LABEL( ctx, "screen.results_stub", vxui_demo_text_style( VXUI_DEMO_FONT_ROLE_TITLE, 46.0f, theme.title_text ) );
-            VXUI_LABEL( ctx, record.score_text, vxui_demo_text_style( VXUI_DEMO_FONT_ROLE_SECTION, 26.0f, theme.section_text ) );
-            VXUI_LABEL( ctx, record.clear_text, vxui_demo_text_style( VXUI_DEMO_FONT_ROLE_BODY, 20.0f, theme.success_text ) );
+        {
+            const vxui_menu_card_cfg hdr_cfg = {
+                { 0, 0, 0, 0 }, { 0, 0, 0, 0 }, 14.0f, 18, 8, 0.0f,
+            };
+            vxui_menu_card_begin( ctx, "results_stub.header", &hdr_cfg );
+            {
+                VXUI_LABEL( ctx, "screen.results_stub", vxui_demo_text_style( VXUI_DEMO_FONT_ROLE_TITLE, 46.0f, theme.title_text ) );
+                VXUI_LABEL( ctx, record.score_text, vxui_demo_text_style( VXUI_DEMO_FONT_ROLE_SECTION, 26.0f, theme.section_text ) );
+                VXUI_LABEL( ctx, record.clear_text, vxui_demo_text_style( VXUI_DEMO_FONT_ROLE_BODY, 16.0f, theme.success_text ) );
+            }
+            vxui_menu_card_end( ctx );
         }
-        VXUI_LABEL( ctx, "The front-end loop is complete: sortie selection, launch handoff, and debrief all return to the command deck without hidden gameplay state.", vxui_demo_text_style( VXUI_DEMO_FONT_ROLE_BODY, 20.0f, theme.body_text ) );
+        VXUI_LABEL( ctx, "The front-end loop is complete: sortie selection, launch handoff, and debrief all return to the command deck without hidden gameplay state.", vxui_demo_text_style( VXUI_DEMO_FONT_ROLE_BODY, 16.0f, theme.body_text ) );
         {
             const vxui_menu_card_cfg card_cfg = {
-                theme.utility_fill, theme.utility_border, 12.0f, 18, 10, 0.0f,
+                { 0, 0, 0, 0 }, { 0, 0, 0, 0 }, 12.0f, 18, 10, 0.0f,
             };
             vxui_menu_card_begin( ctx, "results_stub.actions", &card_cfg );
             {
@@ -5268,6 +5282,9 @@ static void vxui_demo_render_results_stub_screen( vxui_demo_app* app, vxui_ctx* 
             }
             vxui_menu_card_end( ctx );
         }
+        VXUI( ctx, "results_stub.spacer", {
+            .layout = { .sizing = { CLAY_SIZING_GROW( 0 ), CLAY_SIZING_GROW( 0 ) } },
+        } ) {}
         vxui_menu_footer( ctx, "results_stub.footer", &screen_cfg.footer );
         vxui_menu_screen_end( ctx, &shell_state );
     }

@@ -325,10 +325,10 @@ inline vxui_menu_style vxui_demo_shared_split_deck_shell_style(
     }
     style.lane_gap = lane_gap;
     // Split-deck lane colors intentionally differ from apply_title_menu_theme defaults
-    style.panel_fill_color = theme.secondary_panel_fill;
-    style.row_fill_color = theme.primary_panel_fill;
-    style.row_border_color = theme.primary_panel_border;
-    style.row_focus_border_color = theme.secondary_panel_border;
+    style.panel_fill_color = { 0, 0, 0, 0 };
+    style.row_fill_color = { 0, 0, 0, 0 };
+    style.row_border_color = { 0, 0, 0, 0 };
+    style.row_focus_border_color = theme.focused_row_border;
     style.section_text_color = theme.title_text;
     return style;
 }
@@ -369,8 +369,8 @@ inline vxui_menu_footer_cfg vxui_demo_shared_make_split_deck_footer_cfg(
     return ( vxui_menu_footer_cfg ) {
         prompt_items,
         ( int ) PromptCount,
-        status_items,
-        ( int ) StatusCount,
+        nullptr,
+        0,
         VXUI_MENU_SHELL_COMPACT_AUTO,
         compact_max_status_items,
         false,
@@ -409,10 +409,10 @@ inline vxui_menu_style vxui_demo_shared_menu_style_form_deck( const vxui_demo_sp
     style.title_font_id = visuals.section_font_id;
     style.badge_font_id = visuals.body_font_id;
     style.label_lane_width = label_lane_width;
-    style.body_font_size = 18.0f;
-    style.secondary_font_size = 15.0f;
-    style.title_font_size = 24.0f;
-    style.row_height = 40.0f;
+    style.body_font_size = 14.0f;
+    style.secondary_font_size = 11.0f;
+    style.title_font_size = 11.0f;
+    style.row_height = 30.0f;
     style.row_gap = 4.0f;
     style.section_gap = 10.0f;
     style.padding_x = 14.0f;
@@ -462,10 +462,11 @@ inline void vxui_demo_render_sortie_screen_shared( vxui_ctx* ctx, const vxui_dem
     const bool tertiary_enabled = vxui_demo_shared_use_sortie_tertiary_lane( layout, compact_detail );
     vxui_menu_style shell_style = vxui_demo_shared_split_deck_shell_style( visuals, layout.deck_gap, compact_shell );
     vxui_menu_style form_style = vxui_demo_shared_menu_style_form_deck( visuals, 110.0f );
-    form_style.body_font_size = compact_footer ? 13.0f : compact_menu ? 15.0f : 16.0f;
-    form_style.secondary_font_size = compact_footer ? 10.0f : compact_menu ? 12.0f : 13.0f;
-    form_style.badge_font_size = compact_footer ? 8.0f : compact_menu ? 10.0f : 11.0f;
-    form_style.row_height = compact_footer ? 22.0f : compact_menu ? 28.0f : 30.0f;
+    form_style.body_font_size = compact_footer ? 11.0f : compact_menu ? 13.0f : 14.0f;
+    form_style.secondary_font_size = compact_footer ? 9.0f : compact_menu ? 10.0f : 11.0f;
+    form_style.badge_font_size = compact_footer ? 8.0f : compact_menu ? 9.0f : 9.0f;
+    form_style.title_font_size = 11.0f;
+    form_style.row_height = compact_footer ? 20.0f : compact_menu ? 24.0f : 26.0f;
     form_style.row_gap = compact_footer ? 1.0f : 2.0f;
     form_style.section_gap = compact_footer ? 3.0f : compact_menu ? 5.0f : 8.0f;
     form_style.padding_y = compact_footer ? 3.0f : compact_menu ? 6.0f : 8.0f;
@@ -473,8 +474,9 @@ inline void vxui_demo_render_sortie_screen_shared( vxui_ctx* ctx, const vxui_dem
         layout.surface.surface_width,
         layout.surface_max_height,
         theme.app_background_base,
-        theme.primary_panel_fill,
-        theme.primary_panel_border );
+        theme.app_background_base,
+        { 0, 0, 0, 0 } );
+    vxui_demo_make_surface_cfg_transparent( surface_cfg );
     if ( cfg.background_scanline ) {
         vxui_demo_shared_emit_surface_scanline( ctx, "sortie" );
     }
@@ -529,7 +531,7 @@ inline void vxui_demo_render_sortie_screen_shared( vxui_ctx* ctx, const vxui_dem
             if ( compact_detail ) {
                 vxui_demo_emit_compact_mission_title_lines( ctx, mission_index, visuals.title_font_id, theme.title_text );
             } else {
-                VXUI_LABEL( ctx, mission.name, vxui_demo_text_style( visuals.title_font_id, 26.0f, theme.title_text ) );
+                VXUI_LABEL( ctx, mission.name, vxui_demo_text_style( visuals.title_font_id, 22.0f, theme.title_text ) );
             }
             VXUI_LABEL( ctx, mission.region, vxui_demo_text_style( visuals.section_font_id, compact_footer ? 12.0f : compact_detail ? 13.0f : 15.0f, theme.accent_cool ) );
         }
@@ -627,8 +629,9 @@ inline void vxui_demo_render_loadout_screen_shared( vxui_ctx* ctx, const vxui_de
         layout.surface.surface_width,
         layout.surface_max_height,
         theme.app_background_base,
-        theme.primary_panel_fill,
-        theme.primary_panel_border );
+        theme.app_background_base,
+        { 0, 0, 0, 0 } );
+    vxui_demo_make_surface_cfg_transparent( surface_cfg );
     if ( cfg.background_scanline ) {
         vxui_demo_shared_emit_surface_scanline( ctx, "loadout" );
     }
@@ -698,10 +701,10 @@ inline void vxui_demo_render_loadout_screen_shared( vxui_ctx* ctx, const vxui_de
                     visuals.body_font_id, 18.0f,
                     theme.muted_text, theme.stat_track, theme.stat_fill, 220.0f,
                 };
-                vxui_menu_stat_bar( ctx, "loadout.stat.speed", "Speed", ship.speed, &stat_cfg );
-                vxui_menu_stat_bar( ctx, "loadout.stat.shield", "Shield", ship.shield, &stat_cfg );
-                vxui_menu_stat_bar( ctx, "loadout.stat.output", "Output", ship.output, &stat_cfg );
-                vxui_menu_stat_bar( ctx, "loadout.stat.sync", "Sync", ship.sync, &stat_cfg );
+                vxui_menu_stat_bar( ctx, "loadout.stat.speed", "SPEED", ship.speed, &stat_cfg );
+                vxui_menu_stat_bar( ctx, "loadout.stat.shield", "SHIELD", ship.shield, &stat_cfg );
+                vxui_menu_stat_bar( ctx, "loadout.stat.output", "OUTPUT", ship.output, &stat_cfg );
+                vxui_menu_stat_bar( ctx, "loadout.stat.sync", "SYNC", ship.sync, &stat_cfg );
                 VXUI_LABEL( ctx, VXUI_DEMO_SHARED_PRIMARY_NAMES[ std::clamp( cfg.selected_primary_index ? *cfg.selected_primary_index : 0, 0, 3 ) ], vxui_demo_text_style( visuals.body_font_id, 15.0f, theme.section_text ) );
                 VXUI_LABEL( ctx, VXUI_DEMO_SHARED_SUPPORT_NAMES[ std::clamp( cfg.selected_support_index ? *cfg.selected_support_index : 0, 0, 3 ) ], vxui_demo_text_style( visuals.body_font_id, 15.0f, theme.body_text ) );
                 VXUI_LABEL( ctx, VXUI_DEMO_SHARED_SYSTEM_NAMES[ std::clamp( cfg.selected_system_index ? *cfg.selected_system_index : 0, 0, 3 ) ], vxui_demo_text_style( visuals.body_font_id, 15.0f, theme.success_text ) );
@@ -740,8 +743,9 @@ inline void vxui_demo_render_archives_screen_shared( vxui_ctx* ctx, const vxui_d
         layout.surface.surface_width,
         layout.surface_max_height,
         theme.app_background_base,
-        theme.primary_panel_fill,
-        theme.primary_panel_border );
+        theme.app_background_base,
+        { 0, 0, 0, 0 } );
+    vxui_demo_make_surface_cfg_transparent( surface_cfg );
     if ( cfg.background_scanline ) {
         vxui_demo_shared_emit_surface_scanline( ctx, "archives" );
     }
@@ -844,8 +848,9 @@ inline void vxui_demo_render_records_screen_shared( vxui_ctx* ctx, const vxui_de
         layout.surface.surface_width,
         layout.surface_max_height,
         theme.app_background_base,
-        theme.primary_panel_fill,
-        theme.primary_panel_border );
+        theme.app_background_base,
+        { 0, 0, 0, 0 } );
+    vxui_demo_make_surface_cfg_transparent( surface_cfg );
     if ( cfg.background_scanline ) {
         vxui_demo_shared_emit_surface_scanline( ctx, "records" );
     }

@@ -358,8 +358,6 @@ Remaining Clay usage in `main.cpp` that is not authored screen composition:
 | Runtime substrate | `Clay_SetCurrentContext()` | Context lifecycle — not screen authoring |
 | Debug infrastructure | `#ifdef VXUI_DEBUG` overlay | Debug-only path |
 | Debug probes | `Clay_GetElementData()` in debug helpers | Debug-only path |
-| Theme helpers | `vxui_demo_clay_color()`, `vxui_demo_panel_border()` in `theme.h` | Only called from the debug overlay |
-
 The test `demo_layout_architecture.authored_demo_files_do_not_use_direct_clay` enforces this at build time.
 
 ## Screenshot Review Workflow

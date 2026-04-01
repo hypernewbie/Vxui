@@ -211,6 +211,8 @@ typedef struct vxui_menu_style
     float secondary_font_size;
     float title_font_size;
     float badge_font_size;
+    uint16_t body_letter_spacing;
+    uint16_t title_letter_spacing;
     vxui_menu_focus_decor focus_decor;
     float focus_decor_padding;
     float focus_decor_alpha;
@@ -544,9 +546,9 @@ vxui_menu_surface_cfg vxui_menu_surface_cfg_default(
         24.0f,
         18.0f,
         14.0f,
-        18.0f,
+        0.0f,
         1.0f,
-        background_fill_color,
+        { 0, 0, 0, 0 },
         surface_fill_color,
         surface_border_color,
     };
@@ -886,7 +888,7 @@ static float vxui_menu__row_font_size( const vxui_menu_style* style, const vxui_
     return style->body_font_size;
 }
 
-static void vxui_menu__emit_text_leaf( vxui_ctx* ctx, uint32_t owner_id, const char* text, uint32_t font_id, float font_size, vxui_color color )
+static void vxui_menu__emit_text_leaf( vxui_ctx* ctx, uint32_t owner_id, const char* text, uint32_t font_id, float font_size, vxui_color color, uint16_t letter_spacing = 0 )
 {
     const char* resolved = text ? vxui__resolve_text( ctx, text ) : "";
     CLAY_AUTO_ID( vxui__text_leaf_decl( Clay_ElementDeclaration {} ) ) {
@@ -896,7 +898,8 @@ static void vxui_menu__emit_text_leaf( vxui_ctx* ctx, uint32_t owner_id, const c
             vxui__effective_font_id( ctx, font_id ),
             vxui__effective_font_size( ctx, font_size ),
             color,
-            owner_id );
+            owner_id,
+            letter_spacing );
     }
 }
 
@@ -940,9 +943,9 @@ static void vxui_menu__begin_common_row( vxui_menu__scope* scope, uint32_t row_i
     vxui_color fill = disabled ? style->row_disabled_fill_color : ( focused ? style->row_focus_fill_color : style->row_fill_color );
     vxui_color border = focused ? style->row_focus_border_color : style->row_border_color;
     Clay_BorderWidth border_width = {};
-    if ( ( style->flags & VXUI_MENU_STYLE_FOCUS_FRAME ) != 0u ) {
-        uint16_t width = vxui_menu__u16( style->border_width );
-        border_width = { width, width, width, width, width };
+    if ( focused ) {
+        // Left-accent only — tactical selection indicator
+        border_width = { 3, 0, 0, 0, 0 };
     }
 
     Clay__OpenElementWithId( vxui__clay_id_from_hash( row_id ) );
@@ -1099,7 +1102,7 @@ static void vxui_menu__emit_label_and_value(
     vxui_menu__begin_top_lane( scope, row_id, centered );
     auto emit_label_lane = [&]() {
         vxui_menu__begin_lane( scope, row_id, 2u, true );
-        vxui_menu__emit_text_leaf( scope->ctx, row_id, label_key, font_id, font_size, label_color );
+        vxui_menu__emit_text_leaf( scope->ctx, row_id, label_key, font_id, font_size, label_color, scope->style.body_letter_spacing );
         vxui_menu__end_lane();
     };
     auto emit_value_lane = [&]() {
@@ -1300,16 +1303,16 @@ vxui_menu_style vxui_menu_style_compact( void )
 vxui_menu_style vxui_menu_style_title_menu( void )
 {
     vxui_menu_style style = vxui_menu_style_br_title();
-    style.body_font_size = 18.0f;
-    style.title_font_size = 24.0f;
+    style.body_font_size = 14.0f;
+    style.title_font_size = 11.0f;
     style.badge_font_size = 9.0f;
-    style.row_height = 30.0f;
+    style.row_height = 28.0f;
     style.row_gap = 8.0f;
     style.section_gap = 10.0f;
     style.padding_x = 12.0f;
     style.padding_y = 8.0f;
-    style.panel_fill_color = { 14, 18, 28, 196 };
-    style.row_fill_color = { 20, 26, 38, 172 };
+    style.panel_fill_color = { 0, 0, 0, 0 };
+    style.row_fill_color = { 0, 0, 0, 0 };
     style.row_focus_fill_color = { 38, 54, 78, 228 };
     return style;
 }
@@ -1988,19 +1991,19 @@ void vxui_menu_header( vxui_ctx* ctx, const char* id, const vxui_menu_header_cfg
         },
         .backgroundColor = vxui_menu__to_clay_color( vxui_menu__scale_alpha( scope->style.panel_fill_color, 0.72f ) ),
         .cornerRadius = CLAY_CORNER_RADIUS( scope->style.corner_radius ),
-        .border = {
+        .border = scope->style.border_width > 0.0f ? Clay_BorderElementConfig{
             .color = vxui_menu__to_clay_color( vxui_menu__scale_alpha( scope->style.row_border_color, 0.85f ) ),
-            .width = CLAY_BORDER_ALL( 1 ),
-        },
+            .width = CLAY_BORDER_ALL( vxui_menu__u16( scope->style.border_width ) ),
+        } : Clay_BorderElementConfig{},
     } );
 
     if ( header->title_key ) {
         const char* title_id = vxui_menu__push_child_id( ctx, root_id, "title" );
-        vxui_menu__emit_text_leaf( ctx, vxui_id( title_id ), header->title_key, scope->style.title_font_id, scope->compact ? scope->style.title_font_size * 0.88f : scope->style.title_font_size, scope->style.section_text_color );
+        vxui_menu__emit_text_leaf( ctx, vxui_id( title_id ), header->title_key, scope->style.title_font_id, scope->compact ? scope->style.title_font_size * 0.88f : scope->style.title_font_size, scope->style.section_text_color, scope->style.title_letter_spacing );
     }
     if ( header->subtitle_key ) {
         const char* subtitle_id = vxui_menu__push_child_id( ctx, root_id, "subtitle" );
-        vxui_menu__emit_text_leaf( ctx, vxui_id( subtitle_id ), header->subtitle_key, scope->style.body_font_id, scope->style.secondary_font_size, scope->style.secondary_text_color );
+        vxui_menu__emit_text_leaf( ctx, vxui_id( subtitle_id ), header->subtitle_key, scope->style.body_font_id, scope->style.secondary_font_size, scope->style.secondary_text_color, scope->style.body_letter_spacing );
     }
 
     Clay__CloseElement();
@@ -2058,10 +2061,10 @@ static void vxui_menu__lane_begin_impl( vxui_ctx* ctx, const char* id, const vxu
         },
         .backgroundColor = vxui_menu__to_clay_color( lane.weak ? vxui_menu__scale_alpha( fill_color, 0.8f ) : fill_color ),
         .cornerRadius = CLAY_CORNER_RADIUS( scope->style.corner_radius ),
-        .border = {
+        .border = scope->style.border_width > 0.0f ? Clay_BorderElementConfig{
             .color = vxui_menu__to_clay_color( lane.weak ? vxui_menu__scale_alpha( border_color, 0.7f ) : border_color ),
-            .width = { 1, 1, 1, 1, 1 },
-        },
+            .width = { vxui_menu__u16( scope->style.border_width ), vxui_menu__u16( scope->style.border_width ), vxui_menu__u16( scope->style.border_width ), vxui_menu__u16( scope->style.border_width ), vxui_menu__u16( scope->style.border_width ) },
+        } : Clay_BorderElementConfig{},
     } );
 
     scope->lane_open = true;
@@ -2337,10 +2340,10 @@ void vxui_menu_footer( vxui_ctx* ctx, const char* id, const vxui_menu_footer_cfg
         },
         .backgroundColor = vxui_menu__to_clay_color( vxui_menu__scale_alpha( scope->style.panel_fill_color, compact ? 0.92f : 0.98f ) ),
         .cornerRadius = CLAY_CORNER_RADIUS( scope->style.corner_radius ),
-        .border = {
+        .border = scope->style.border_width > 0.0f ? Clay_BorderElementConfig{
             .color = vxui_menu__to_clay_color( vxui_menu__scale_alpha( scope->style.row_border_color, 0.78f ) ),
-            .width = CLAY_BORDER_ALL( 1 ),
-        },
+            .width = CLAY_BORDER_ALL( vxui_menu__u16( scope->style.border_width ) ),
+        } : Clay_BorderElementConfig{},
     } );
 
     if ( visible_prompt_count > 0 ) {
@@ -2464,10 +2467,10 @@ void vxui_menu_card_begin( vxui_ctx* ctx, const char* id, const vxui_menu_card_c
         },
         .backgroundColor = vxui_menu__to_clay_color( c.fill_color ),
         .cornerRadius = CLAY_CORNER_RADIUS( c.corner_radius ),
-        .border = {
+        .border = c.border_color.a > 0 ? Clay_BorderElementConfig{
             .color = vxui_menu__to_clay_color( c.border_color ),
             .width = { 1, 1, 1, 1, 1 },
-        },
+        } : Clay_BorderElementConfig{},
     } );
 }
 
@@ -2497,10 +2500,10 @@ void vxui_menu_button( vxui_ctx* ctx, const char* id, const char* label_key, con
         },
         .backgroundColor = vxui_menu__to_clay_color( focused ? c.fill_focus : c.fill ),
         .cornerRadius = CLAY_CORNER_RADIUS( c.corner_radius ),
-        .border = {
+        .border = ( focused ? c.border_focus : c.border ).a > 0 ? Clay_BorderElementConfig{
             .color = vxui_menu__to_clay_color( focused ? c.border_focus : c.border ),
             .width = { 1, 1, 1, 1, 1 },
-        },
+        } : Clay_BorderElementConfig{},
     } );
     vxui_menu__emit_text_leaf( ctx, action_id, label_key, c.font_id, c.font_size, focused ? c.text_focus : c.text );
     Clay__CloseElement();

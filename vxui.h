@@ -74,6 +74,7 @@ typedef struct vxui_label_cfg
     uint32_t font_id;
     float font_size;
     vxui_color color;
+    uint16_t letter_spacing;
 } vxui_label_cfg;
 
 typedef struct vxui_value_cfg
@@ -154,6 +155,7 @@ typedef struct vxui_resolved_font
 {
     uint32_t font_id;
     float line_height;
+    float render_scale;
 } vxui_resolved_font;
 
 typedef enum vxui_dir
@@ -207,6 +209,7 @@ typedef struct vxui_draw_cmd_text
     vxui_vec2 pos;
     uint32_t font_id;
     float size;
+    float render_scale;
     vxui_color color;
     const char* text;
 } vxui_draw_cmd_text;
@@ -859,7 +862,7 @@ static vxui_resolved_font vxui__resolve_font( vxui_ctx* ctx, uint32_t font_id, f
 static uint16_t vxui__text_metric_to_u16( float value );
 static vxui_color vxui__effective_text_color( vxui_ctx* ctx, vxui_color color );
 static float vxui__default_control_height( vxui_ctx* ctx, uint32_t font_id = 0, float font_size = 0.0f );
-static void vxui__emit_text( vxui_ctx* ctx, const char* text, uint32_t font_id, float font_size, vxui_color color, uintptr_t owner_id = 0 );
+static void vxui__emit_text( vxui_ctx* ctx, const char* text, uint32_t font_id, float font_size, vxui_color color, uintptr_t owner_id = 0, uint16_t letter_spacing = 0 );
 static void vxui__register_action( vxui_ctx* ctx, uint32_t id, vxui_action_fn fn, vxui_action_cfg cfg );
 /* --------------------------- Animation and focus --------------------------- */
 
@@ -1111,11 +1114,12 @@ static Clay_Dimensions vxui__measure_text( Clay_StringSlice text, Clay_TextEleme
     vxui_ctx* ctx = ( vxui_ctx* ) userdata;
     Clay_Dimensions dims = {};
     dims.height = 0.0f;
+    vxui_resolved_font resolved = {};
 
     if ( cfg ) {
         dims.height = cfg->lineHeight > 0 ? ( float ) cfg->lineHeight : ( float ) cfg->fontSize;
         if ( ctx && ctx->font_resolver ) {
-            vxui_resolved_font resolved = vxui__resolve_font( ctx, ( uint32_t ) cfg->fontId, ( float ) cfg->fontSize );
+            resolved = vxui__resolve_font( ctx, ( uint32_t ) cfg->fontId, ( float ) cfg->fontSize );
             if ( resolved.line_height > 0.0f ) {
                 dims.height = resolved.line_height;
                 cfg->lineHeight = vxui__text_metric_to_u16( resolved.line_height );
@@ -1137,7 +1141,8 @@ static Clay_Dimensions vxui__measure_text( Clay_StringSlice text, Clay_TextEleme
     }
 
     std::u8string temp( ( const char8_t* ) text.chars, ( size_t ) text.length );
-    ve_fontcache_vec2 result = ve_fontcache_measure_text( cache, ( ve_font_id ) font_id, temp, 1.0f, 1.0f, true );
+    const float render_scale = ( cfg && ctx && ctx->font_resolver && resolved.render_scale > 0.0f ) ? resolved.render_scale : 1.0f;
+    ve_fontcache_vec2 result = ve_fontcache_measure_text( cache, ( ve_font_id ) font_id, temp, render_scale, render_scale, true );
 
     dims.width = result.x;
     return dims;
@@ -1300,10 +1305,11 @@ static float vxui__effective_font_size( vxui_ctx* ctx, float font_size )
 
 static vxui_resolved_font vxui__resolve_font( vxui_ctx* ctx, uint32_t font_id, float font_size )
 {
-    vxui_resolved_font resolved = { font_id, font_size };
+    vxui_resolved_font resolved = { font_id, font_size, 1.0f };
     if ( ctx && ctx->font_resolver ) {
         resolved.font_id = UINT32_MAX;
         resolved.line_height = 0.0f;
+        resolved.render_scale = 1.0f;
         ctx->font_resolver( ctx, font_id, font_size, ctx->locale, ctx->font_resolver_userdata, &resolved );
         if ( resolved.font_id == UINT32_MAX ) {
             resolved.font_id = font_id;
@@ -1311,6 +1317,9 @@ static vxui_resolved_font vxui__resolve_font( vxui_ctx* ctx, uint32_t font_id, f
     }
     if ( resolved.line_height <= 0.0f ) {
         resolved.line_height = font_size;
+    }
+    if ( resolved.render_scale <= 0.0f ) {
+        resolved.render_scale = 1.0f;
     }
     return resolved;
 }
@@ -1348,7 +1357,7 @@ static float vxui__default_control_height( vxui_ctx* ctx, uint32_t font_id, floa
     return height < 32.0f ? 32.0f : height;
 }
 
-static void vxui__emit_text( vxui_ctx* ctx, const char* text, uint32_t font_id, float font_size, vxui_color color, uintptr_t owner_id )
+static void vxui__emit_text( vxui_ctx* ctx, const char* text, uint32_t font_id, float font_size, vxui_color color, uintptr_t owner_id, uint16_t letter_spacing )
 {
     const char* copied = vxui__push_frame_string( ctx, text ? text : "", text ? std::strlen( text ) : 0 );
     vxui_resolved_font resolved = vxui__resolve_font( ctx, font_id, font_size );
@@ -1363,6 +1372,7 @@ static void vxui__emit_text( vxui_ctx* ctx, const char* text, uint32_t font_id, 
             .textColor = { ( float ) color.r, ( float ) color.g, ( float ) color.b, ( float ) color.a },
             .fontId = vxui__text_metric_to_u16( ( float ) resolved.font_id ),
             .fontSize = vxui__text_metric_to_u16( font_size ),
+            .letterSpacing = letter_spacing,
             .lineHeight = line_height,
         } ) );
 }
@@ -1998,6 +2008,7 @@ typedef struct vxui__trait_glow_params
 {
     float padding;
     float alpha;
+    float radius;
 } vxui__trait_glow_params;
 
 typedef struct vxui__trait_scanline_params
@@ -2044,9 +2055,10 @@ static void vxui__trait_glow( vxui_anim_state* element, vxui_draw_list* draw_lis
     if ( !cmd ) {
         return;
     }
+    float radius = p && p->radius > 0.0f ? p->radius : 8.0f;
     cmd->rect_rounded.bounds = { bounds.x - padding, bounds.y - padding, bounds.w + padding * 2.0f, bounds.h + padding * 2.0f };
     cmd->rect_rounded.color = { 80, 200, 255, ( uint8_t ) ( alpha * 255.0f ) };
-    cmd->rect_rounded.radius = 8.0f;
+    cmd->rect_rounded.radius = radius;
 }
 
 static void vxui__trait_scanline( vxui_anim_state* element, vxui_draw_list* draw_list, vxui_rect bounds, float t, bool focused, const void* params )
@@ -2999,6 +3011,7 @@ static void vxui__translate_clay_commands( vxui_ctx* ctx )
                 queued->pos = ( vxui_vec2 ) { src->boundingBox.x, src->boundingBox.y };
                 queued->font_id = text->fontId;
                 queued->size = ( float ) text->fontSize;
+                queued->render_scale = vxui__resolve_font( ctx, ( uint32_t ) text->fontId, ( float ) text->fontSize ).render_scale;
                 queued->color = vxui__color_from_clay( text->textColor );
                 queued->text = copied;
 
@@ -4352,7 +4365,7 @@ void VXUI_LABEL( vxui_ctx* ctx, const char* l10n_key, vxui_label_cfg cfg )
     ctx->current_decl_id = decl_id;
 
     CLAY( vxui__clay_id_from_hash( clay_id ), vxui__text_leaf_decl( Clay_ElementDeclaration {} ) ) {
-        vxui__emit_text( ctx, resolved, font_id, font_size, color, decl_id );
+        vxui__emit_text( ctx, resolved, font_id, font_size, color, decl_id, cfg.letter_spacing );
     }
 }
 

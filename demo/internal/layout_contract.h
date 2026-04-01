@@ -364,10 +364,10 @@ inline vxui_demo_main_menu_contract vxui_demo_get_main_menu_contract( void )
     return {
         8.0f,
         8.0f,
-        0.40f,
-        290.0f,
-        360.0f,
-        320.0f,
+        0.34f,
+        244.0f,
+        264.0f,
+        340.0f,
         18.0f,
         250.0f,
         260.0f,
@@ -435,22 +435,22 @@ inline vxui_demo_controls_block_contract vxui_demo_get_controls_block_contract( 
     const bool compact_width = owner_width > 0.0f && owner_width <= 520.0f;
     if ( compact_height || compact_width ) {
         return {
+            5,
             6,
-            8,
-            14.0f,
             12.0f,
-            3.0f,
-            34.0f,
+            9.4f,
+            2.0f,
+            28.0f,
             true,
             1,
         };
     }
     return {
-        12,
         8,
-        20.0f,
-        17.0f,
-        6.0f,
+        6,
+        15.0f,
+        10.8f,
+        3.0f,
         0.0f,
         false,
         1,

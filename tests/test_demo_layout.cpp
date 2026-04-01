@@ -1484,7 +1484,6 @@ UTEST_F( demo_layout_fixture, main_menu_production_parity_harness_matches_runtim
     vxui_rect help = {};
     vxui_rect footer = {};
     vxui_rect footer_prompts = {};
-    vxui_rect footer_status = {};
     vxui_rect help_title = {};
     vxui_rect help_lines[ 4 ] = {};
     ASSERT_TRUE( demo_layout_find_element_bounds( "main.preview_panel", &preview_panel ) );
@@ -1493,7 +1492,6 @@ UTEST_F( demo_layout_fixture, main_menu_production_parity_harness_matches_runtim
     ASSERT_TRUE( demo_layout_find_controls_block_regions( "main.preview.help_legend", &help, &help_title, help_lines, help_line_count ) );
     ASSERT_TRUE( demo_layout_find_element_bounds( "main.footer", &footer ) );
     ASSERT_TRUE( demo_layout_find_element_bounds( "main.footer.prompts", &footer_prompts ) );
-    ASSERT_TRUE( demo_layout_find_element_bounds( "main.footer.status", &footer_status ) );
 }
 
 UTEST_F( demo_layout_fixture, main_menu_preview_help_is_fully_visible_in_supported_short_landscape_heights )
@@ -1542,14 +1540,11 @@ UTEST_F( demo_layout_fixture, main_menu_footer_prompt_band_remains_fully_visible
         vxui_rect surface = {};
         vxui_rect footer = {};
         vxui_rect footer_prompts = {};
-        vxui_rect footer_status = {};
         ASSERT_TRUE( demo_layout_find_element_bounds( "main.surface", &surface ) );
         ASSERT_TRUE( demo_layout_find_element_bounds( "main.footer", &footer ) );
         ASSERT_TRUE( demo_layout_find_element_bounds( "main.footer.prompts", &footer_prompts ) );
-        ASSERT_TRUE( demo_layout_find_element_bounds( "main.footer.status", &footer_status ) );
         EXPECT_TRUE( vxui_demo_element_fully_visible_inside( surface, footer, 0.0f ) );
         EXPECT_TRUE( vxui_demo_element_fully_visible_inside( footer, footer_prompts, 0.0f ) );
-        EXPECT_TRUE( vxui_demo_element_fully_visible_inside( footer, footer_status, 0.0f ) );
         EXPECT_TRUE( vxui_demo_no_text_in_band( &list, footer.y, footer.y + footer.h, [&]( const vxui_cmd& cmd ) {
             if ( std::strcmp( cmd.text.text, preview->body ) == 0 ) {
                 return true;
@@ -1659,53 +1654,7 @@ UTEST_F( demo_layout_fixture, main_menu_preview_body_and_help_regions_do_not_vis
     }
 }
 
-UTEST_F( demo_layout_fixture, main_menu_footer_status_rows_remain_readable_below_preview_stack )
-{
-    const int sizes[][ 2 ] = { { 1280, 680 }, { 1280, 648 }, { 1100, 648 } };
-    const demo_layout_focus_mode focuses[] = { DEMO_FOCUS_FIRST, DEMO_FOCUS_DETAIL_HEAVY };
-    for ( const auto& size : sizes ) {
-        for ( demo_layout_focus_mode focus : focuses ) {
-            const demo_layout_case test_case = { "main_menu", "en", size[ 0 ], size[ 1 ], 0, DEMO_TEXT_PACK_NORMAL, focus, 0, 0 };
-            ( void ) demo_layout_render_case( utest_fixture, test_case );
-            const float surface_max_height = std::max( 0.0f, ( float ) test_case.height - VXUI_DEMO_LAYOUT_OUTER_PADDING * 2.0f );
-            const float help_owner_width = demo_layout_main_menu_help_owner_width( test_case.width, test_case.height, test_case.locale );
-            const int help_line_count = demo_layout_main_menu_visible_help_line_count( test_case.locale, test_case.width, test_case.height );
-
-            vxui_rect help = {};
-            vxui_rect help_title = {};
-            vxui_rect help_lines[ 4 ] = {};
-            vxui_rect footer = {};
-            vxui_rect footer_prompts = {};
-            vxui_rect footer_status = {};
-            vxui_rect footer_status_locale = {};
-            vxui_rect footer_status_prompts = {};
-            vxui_rect footer_status_screens = {};
-            vxui_rect footer_status_top = {};
-            ASSERT_TRUE( demo_layout_find_controls_block_regions( "main.preview.help_legend", &help, &help_title, help_lines, help_line_count ) );
-            ASSERT_TRUE( demo_layout_find_element_bounds( "main.footer", &footer ) );
-            ASSERT_TRUE( demo_layout_find_element_bounds( "main.footer.prompts", &footer_prompts ) );
-            ASSERT_TRUE( demo_layout_find_element_bounds( "main.footer.status", &footer_status ) );
-            ASSERT_TRUE( demo_layout_find_element_bounds( "main.footer.status.locale", &footer_status_locale ) );
-            ASSERT_TRUE( demo_layout_find_element_bounds( "main.footer.status.prompts", &footer_status_prompts ) );
-            ASSERT_TRUE( demo_layout_find_element_bounds( "main.footer.status.top", &footer_status_top ) );
-            const bool have_screens = demo_layout_find_element_bounds( "main.footer.status.screens", &footer_status_screens );
-
-            EXPECT_TRUE( vxui_demo_element_fully_visible_inside( footer, footer_prompts, 0.0f ) );
-            EXPECT_TRUE( vxui_demo_element_fully_visible_inside( footer, footer_status, 0.0f ) );
-            EXPECT_TRUE( vxui_demo_element_fully_visible_inside( footer_status, footer_status_locale, 0.0f ) );
-            EXPECT_TRUE( vxui_demo_element_fully_visible_inside( footer_status, footer_status_prompts, 0.0f ) );
-            EXPECT_TRUE( vxui_demo_element_fully_visible_inside( footer_status, footer_status_top, 0.0f ) );
-            EXPECT_TRUE( demo_layout_rect_reads_inline_pair( footer_status_locale ) );
-            EXPECT_TRUE( demo_layout_rect_reads_inline_pair( footer_status_prompts ) );
-            EXPECT_TRUE( demo_layout_rect_reads_inline_pair( footer_status_top ) );
-            EXPECT_TRUE( vxui_demo_vertical_stack_order( help, footer, 0.0f ) );
-            EXPECT_TRUE( vxui_demo_rects_non_overlapping( help_title, footer, 0.0f ) );
-            for ( int i = 0; i < help_line_count; ++i ) {
-                EXPECT_TRUE( vxui_demo_rects_non_overlapping( help_lines[ i ], footer, 0.0f ) );
-            }
-        }
-    }
-}
+// Footer status rows test removed — status telemetry no longer present in footer.
 
 UTEST_F( demo_layout_fixture, main_menu_preview_body_does_not_overlap_controls_block )
 {
